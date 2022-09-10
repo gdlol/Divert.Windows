@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 
 namespace Divert.Windows;
 
-unsafe internal class CString : IDisposable
+internal class CString : IDisposable
 {
     internal IntPtr Ptr { get; }
 
