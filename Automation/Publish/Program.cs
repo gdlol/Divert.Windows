@@ -22,6 +22,17 @@ static void Run(string commandName, params string[] args)
     }
 }
 
+static string GetOutput(string commandName, params string[] args)
+{
+    var command = Command.Create(commandName, args).CaptureStdOut();
+    var result = command.Execute();
+    if (result.ExitCode != 0)
+    {
+        throw new Win32Exception(result.ExitCode);
+    }
+    return result.StdOut;
+}
+
 string version = args.Length > 0 ? args[0] : "1.0.0";
 
 string filePath = GetFilePath();
@@ -34,15 +45,33 @@ if (Directory.Exists(publishPath))
     Directory.Delete(publishPath, recursive: true);
 }
 
-string userName = Command.Create("git", new[] { "config", "user.name" }).CaptureStdOut().Execute().StdOut.Trim();
+// Get metadata from Git.
+string userName = GetOutput("git", "config", "user.name").Trim();
+var remotes = GetOutput("git", "remote").Trim();
+string? repositoryUrl = remotes.Split('\n').FirstOrDefault() switch
+{
+    null or "" => null,
+    string remote => GetOutput("git", "remote", "get-url", remote.Trim()).Trim()
+};
 Console.WriteLine($"{nameof(userName)}: {userName}");
+Console.WriteLine($"{nameof(repositoryUrl)}: {repositoryUrl}");
 string projectName = "Divert.Windows";
 string description = "WinDivert .NET APIs.";
 
-Run("dotnet", "pack",
+var arguments = new List<string>
+{
+    "pack",
     Path.Combine(projectPath, projectName, $"{projectName}.csproj"),
     "--configuration", "Release",
     "--output", publishPath,
     $"-property:PackageVersion={version}",
     $"-property:Authors={userName}",
-    $"-property:PackageDescription={description}");
+    $"-property:PackageDescription={description}",
+    $"-property:PackageLicenseExpression=MIT",
+    $"-property:PackageRequireLicenseAcceptance=true"
+};
+if (repositoryUrl is not null)
+{
+    arguments.Add($"-property:RepositoryUrl={repositoryUrl}");
+}
+Run("dotnet", arguments.ToArray());

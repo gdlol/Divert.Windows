@@ -11,10 +11,9 @@ var identity = WindowsIdentity.GetCurrent();
 var principal = new WindowsPrincipal(identity);
 if (!principal.IsInRole(WindowsBuiltInRole.Administrator))
 {
-    var exeName = Environment.ProcessPath;
     var startInfo = new ProcessStartInfo
     {
-        FileName = exeName,
+        FileName = Environment.ProcessPath,
         Verb = "runas",
         Arguments = args.Length > 0 ? args[0] : string.Empty,
         UseShellExecute = true
@@ -42,7 +41,7 @@ using var inDivert = new DivertService(inboundFilter);
 
 var ping = Task.Run(async () =>
 {
-    var ping = new Ping();
+    using var ping = new Ping();
     while (true)
     {
         await Task.Delay(TimeSpan.FromSeconds(1));
