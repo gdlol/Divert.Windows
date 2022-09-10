@@ -67,8 +67,9 @@ var arguments = new List<string>
     $"-property:PackageVersion={version}",
     $"-property:Authors={userName}",
     $"-property:PackageDescription={description}",
-    $"-property:PackageLicenseExpression=MIT",
-    $"-property:PackageRequireLicenseAcceptance=true"
+    "-property:PackageLicenseExpression=MIT",
+    "-property:PackageRequireLicenseAcceptance=true",
+    "-property:PackageTags=WinDivert",
 };
 if (repositoryUrl is not null)
 {
