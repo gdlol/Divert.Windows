@@ -1,6 +1,6 @@
 namespace Divert.Windows;
 
-public enum DiverShutdown
+public enum DivertShutdown
 {
     Receive = 0x1,
     Send = 0x2,

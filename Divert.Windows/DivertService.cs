@@ -8,7 +8,7 @@ using Windows.Win32.Foundation;
 
 namespace Divert.Windows;
 
-unsafe public class DivertService : IDisposable
+unsafe sealed public class DivertService : IDisposable
 {
     internal HANDLE Handle { get; }
 
@@ -80,7 +80,7 @@ unsafe public class DivertService : IDisposable
         }
     }
 
-    public void Shutdown(DiverShutdown how)
+    public void Shutdown(DivertShutdown how)
     {
         ThrowIfDisposed();
 
