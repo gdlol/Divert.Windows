@@ -1,4 +1,4 @@
-# Native.WinDivert
+# Divert.Windows
 
 WinDivert .NET APIs.
 
