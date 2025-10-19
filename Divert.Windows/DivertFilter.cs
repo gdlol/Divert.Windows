@@ -3,9 +3,9 @@ using System.Text.RegularExpressions;
 
 namespace Divert.Windows;
 
-internal record class ReplaceParenthesesOperation(string Expression);
+internal record struct ReplaceParenthesesOperation(string Expression);
 
-public class DivertFilter
+public partial class DivertFilter
 {
     public string Clause { get; }
 
@@ -65,11 +65,15 @@ public class DivertFilter
         return builder.ToString();
     }
 
-    private static readonly string orOp = Regex.Escape("||");
+    [GeneratedRegex(@"\s(or|\|\|)\s")]
+    private static partial Regex OrPatternRegex();
 
-    private static bool MatchOrPattern(string s) => Regex.IsMatch(ReplaceParentheses(s), @$"\s(or|{orOp})\s");
+    private static bool MatchOrPattern(string s) => OrPatternRegex().IsMatch(ReplaceParentheses(s));
 
-    private static bool MatchAndPattern(string s) => Regex.IsMatch(ReplaceParentheses(s), @"\s(and|&&)\s");
+    [GeneratedRegex(@"\s(and|&&)\s")]
+    private static partial Regex AndPatternRegex();
+
+    private static bool MatchAndPattern(string s) => AndPatternRegex().IsMatch(ReplaceParentheses(s));
 
     public static DivertFilter operator &(DivertFilter left, DivertFilter right)
     {
@@ -121,22 +125,13 @@ public class DivertFilter
 
         public override bool Equals(object? obj)
         {
-            if (obj is null)
+            return obj switch
             {
-                return false;
-            }
-            else if (obj is Field filter)
-            {
-                return field == filter.field;
-            }
-            else if (obj is string s)
-            {
-                return field == s;
-            }
-            else
-            {
-                return false;
-            }
+                null => false,
+                Field filter => field == filter.field,
+                string s => field == s,
+                _ => false,
+            };
         }
 
         public override int GetHashCode() => base.GetHashCode();
@@ -175,37 +170,37 @@ public class DivertFilter
             return new DivertFilter(clause);
         }
 
-        public static DivertFilter operator ==(Field left, object right)
+        public static DivertFilter operator ==(Field left, string right)
         {
             string clause = $"{left} = {right}";
             return new DivertFilter(clause);
         }
 
-        public static DivertFilter operator !=(Field left, object right)
+        public static DivertFilter operator !=(Field left, string right)
         {
             string clause = $"{left} != {right}";
             return new DivertFilter(clause);
         }
 
-        public static DivertFilter operator <(Field left, object right)
+        public static DivertFilter operator <(Field left, string right)
         {
             string clause = $"{left} < {right}";
             return new DivertFilter(clause);
         }
 
-        public static DivertFilter operator >(Field left, object right)
+        public static DivertFilter operator >(Field left, string right)
         {
             string clause = $"{left} > {right}";
             return new DivertFilter(clause);
         }
 
-        public static DivertFilter operator <=(Field left, object right)
+        public static DivertFilter operator <=(Field left, string right)
         {
             string clause = $"{left} <= {right}";
             return new DivertFilter(clause);
         }
 
-        public static DivertFilter operator >=(Field left, object right)
+        public static DivertFilter operator >=(Field left, string right)
         {
             string clause = $"{left} >= {right}";
             return new DivertFilter(clause);
@@ -266,6 +261,7 @@ public class DivertFilter
 
     public static Field ICMP { get; } = "icmp";
 
+    // spell-checker:ignore icmpv6
     public static Field ICMPv6 { get; } = "icmpv6";
 
     public static Field TCP { get; } = "tcp";

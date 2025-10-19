@@ -1,0 +1,18 @@
+{
+  "version": "0.2",
+  "enableGlobDot": true,
+  "useGitignore": true,
+  "gitignoreRoot": ".",
+  "ignorePaths": ["LICENSE"],
+  "words": [
+    "csharpierignore",
+    "csharpierrc",
+    "devcontainer",
+    "devcontainers",
+    "globalconfig",
+    "msbuild",
+    "packagejson",
+    "runas",
+    "WINDIVERT"
+  ]
+}

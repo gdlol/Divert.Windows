@@ -1,2 +1,4 @@
+INVALID_HANDLE_VALUE
+WIN32_ERROR
 GetOverlappedResult
 CancelIoEx

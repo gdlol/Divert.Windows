@@ -11,5 +11,5 @@ public enum DivertFlags
     SendOnly = 0x0008,
     WriteOnly = SendOnly,
     NoInstall = 0x0010,
-    Fragments = 0x0020
+    Fragments = 0x0020,
 }

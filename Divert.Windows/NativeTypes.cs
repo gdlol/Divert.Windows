@@ -8,7 +8,7 @@ internal enum WINDIVERT_LAYER
     WINDIVERT_LAYER_NETWORK_FORWARD = 1,
     WINDIVERT_LAYER_FLOW = 2,
     WINDIVERT_LAYER_SOCKET = 3,
-    WINDIVERT_LAYER_REFLECT = 4
+    WINDIVERT_LAYER_REFLECT = 4,
 }
 
 [StructLayout(LayoutKind.Explicit, Size = 8)]
@@ -22,7 +22,7 @@ internal struct WINDIVERT_DATA_NETWORK
 }
 
 [StructLayout(LayoutKind.Explicit, Size = 64)]
-unsafe internal struct WINDIVERT_DATA_FLOW
+internal unsafe struct WINDIVERT_DATA_FLOW
 {
     [FieldOffset(0)]
     public ulong EndpointId;
@@ -50,7 +50,7 @@ unsafe internal struct WINDIVERT_DATA_FLOW
 }
 
 [StructLayout(LayoutKind.Explicit, Size = 64)]
-unsafe internal struct WINDIVERT_DATA_SOCKET
+internal unsafe struct WINDIVERT_DATA_SOCKET
 {
     [FieldOffset(0)]
     public ulong EndpointId;
@@ -110,7 +110,7 @@ internal enum WINDIVERT_ADDRESS_BITS : byte
 }
 
 [StructLayout(LayoutKind.Explicit, Size = 80)]
-unsafe internal struct WINDIVERT_ADDRESS
+internal unsafe struct WINDIVERT_ADDRESS
 {
     [FieldOffset(0)]
     public long Timestamp;
@@ -166,12 +166,12 @@ internal enum WINDIVERT_PARAM
     WINDIVERT_PARAM_QUEUE_TIME = 1,
     WINDIVERT_PARAM_QUEUE_SIZE = 2,
     WINDIVERT_PARAM_VERSION_MAJOR = 3,
-    WINDIVERT_PARAM_VERSION_MINOR = 4
+    WINDIVERT_PARAM_VERSION_MINOR = 4,
 }
 
 internal enum WINDIVERT_SHUTDOWN
 {
     WINDIVERT_SHUTDOWN_RECV = 0x1,
     WINDIVERT_SHUTDOWN_SEND = 0x2,
-    WINDIVERT_SHUTDOWN_BOTH = 0x3
+    WINDIVERT_SHUTDOWN_BOTH = 0x3,
 }

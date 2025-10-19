@@ -1,16 +1,19 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
-using System.Runtime.Versioning;
-using Windows.Win32;
+using System.Threading.Channels;
 using Windows.Win32.Foundation;
-
-[assembly: SupportedOSPlatform("windows6.0.6000")]
 
 namespace Divert.Windows;
 
-unsafe sealed public class DivertService : IDisposable
+/// <summary>
+/// Main entry point WinDivert APIs.
+/// </summary>
+public sealed unsafe class DivertService : IDisposable
 {
-    internal HANDLE Handle { get; }
+    private readonly DivertHandle handle;
+
+    private readonly ThreadPoolBoundHandle threadPoolBoundHandle;
+    private readonly Channel<DivertValueTaskSource> vtsPool = Channel.CreateUnbounded<DivertValueTaskSource>();
 
     /// <summary>
     /// Opens a WinDivert handle for the given filter.
@@ -23,7 +26,8 @@ unsafe sealed public class DivertService : IDisposable
         DivertFilter filter,
         DivertLayer layer = DivertLayer.Network,
         short priority = 0,
-        DivertFlags flags = DivertFlags.None)
+        DivertFlags flags = DivertFlags.None
+    )
     {
         ArgumentNullException.ThrowIfNull(filter);
 
@@ -36,7 +40,8 @@ unsafe sealed public class DivertService : IDisposable
             null,
             0,
             &errorStr,
-            &errorPos);
+            &errorPos
+        );
         if (!success)
         {
             string? errorString = Marshal.PtrToStringAnsi(errorStr);
@@ -44,24 +49,52 @@ unsafe sealed public class DivertService : IDisposable
         }
 
         var handle = NativeMethods.WinDivertOpen(s.Ptr, (WINDIVERT_LAYER)layer, priority, (ulong)flags);
-        if (handle.Value.ToInt64() == -1)
+        if (new HANDLE(handle) == HANDLE.INVALID_HANDLE_VALUE)
         {
-            throw new Win32Exception(Marshal.GetLastWin32Error());
+            throw new Win32Exception(Marshal.GetLastPInvokeError());
         }
-        Handle = handle;
+        this.handle = new DivertHandle(handle);
+        threadPoolBoundHandle = ThreadPoolBoundHandle.BindHandle(this.handle);
     }
 
     private bool disposed = false;
+    private bool closed = false;
 
+    private void Close(bool throwOnError)
+    {
+        if (!closed)
+        {
+            bool success = NativeMethods.WinDivertClose(handle.Handle);
+            if (!success && throwOnError)
+            {
+                throw new Win32Exception(Marshal.GetLastPInvokeError());
+            }
+            closed = true;
+        }
+    }
+
+    /// <summary>
+    /// Closes the WinDivert handle.
+    /// </summary>
+    public void Close() => Close(throwOnError: true);
+
+    /// <summary>
+    /// Releases all resources used by the <see cref="DivertService"/>.
+    /// </summary>
     public void Dispose()
     {
         if (!disposed)
         {
-            bool success = NativeMethods.WinDivertClose(Handle);
-            if (!success)
+            if (vtsPool.Writer.TryComplete())
             {
-                throw new Win32Exception(Marshal.GetLastWin32Error());
+                while (vtsPool.Reader.TryRead(out var vts))
+                {
+                    vts.Dispose();
+                }
             }
+            threadPoolBoundHandle.Dispose();
+            handle.Dispose();
+            Close(throwOnError: false);
             disposed = true;
         }
         GC.SuppressFinalize(this);
@@ -72,197 +105,81 @@ unsafe sealed public class DivertService : IDisposable
         Dispose();
     }
 
-    internal void ThrowIfDisposed()
+    private void ThrowIfClosedOrDisposed()
     {
-        if (disposed)
+        if (closed)
         {
-            throw new ObjectDisposedException(nameof(DivertService));
+            throw new InvalidOperationException(nameof(closed));
         }
+        ObjectDisposedException.ThrowIf(disposed, this);
     }
 
+    /// <summary>
+    /// Shuts down the WinDivert handle.
+    /// </summary>
+    /// <param name="how">Specifies how to shut down the handle.</param>
     public void Shutdown(DivertShutdown how)
     {
-        ThrowIfDisposed();
+        ThrowIfClosedOrDisposed();
 
-        bool success = NativeMethods.WinDivertShutdown(Handle, (WINDIVERT_SHUTDOWN)how);
+        bool success = NativeMethods.WinDivertShutdown(handle.Handle, (WINDIVERT_SHUTDOWN)how);
         if (!success)
         {
-            throw new Win32Exception(Marshal.GetLastWin32Error());
+            throw new Win32Exception(Marshal.GetLastPInvokeError());
         }
     }
 
-    public (int packetLength, DivertAddress address) Receive(Span<byte> buffer)
+    /// <summary>
+    /// Receives one or more packets from the network stack.
+    /// </summary>
+    /// <param name="buffer">Buffer to receive the packet data.</param>
+    /// <param name="addresses">Buffer to receive the packet addresses.</param>
+    /// <param name="cancellationToken">Token to observe cancellation requests.</param>
+    /// <returns>A ValueTask representing the asynchronous receive operation.</returns>
+    public ValueTask<DivertReceiveResult> ReceiveAsync(
+        Memory<byte> buffer,
+        Memory<DivertAddress> addresses,
+        CancellationToken cancellationToken = default
+    )
     {
-        ThrowIfDisposed();
+        ThrowIfClosedOrDisposed();
 
-        uint packetLength;
-        WINDIVERT_ADDRESS address;
-        fixed (byte* pBuffer = buffer)
+        if (!vtsPool.Reader.TryRead(out var vts))
         {
-            bool success = NativeMethods.WinDivertRecv(
-                Handle,
-                pBuffer, checked((uint)buffer.Length),
-                &packetLength,
-                &address);
-            if (!success)
-            {
-                throw new Win32Exception(Marshal.GetLastWin32Error());
-            }
+            vts = new DivertValueTaskSource(
+                vtsPool,
+                handle.Handle,
+                threadPoolBoundHandle,
+                runContinuationsAsynchronously: true
+            );
         }
-        return ((int)packetLength, new DivertAddress(address));
+        return vts.ReceiveAsync(buffer, addresses, cancellationToken);
     }
 
-    public (int packetLength, int addressLength) ReceiveEx(
-        Span<byte> buffer,
-        Span<DivertAddress> addresses,
-        CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Injects one or more packets into the network stack.
+    /// </summary>
+    /// <param name="buffer">Buffer containing the packet data.</param>
+    /// <param name="addresses">Addresses of the packets to be injected.</param>
+    /// <param name="cancellationToken">Token to observe cancellation requests.</param>
+    /// <returns>A ValueTask representing the asynchronous send operation.</returns>
+    public ValueTask SendAsync(
+        ReadOnlyMemory<byte> buffer,
+        ReadOnlyMemory<DivertAddress> addresses,
+        CancellationToken cancellationToken = default
+    )
     {
-        ThrowIfDisposed();
-        cancellationToken.ThrowIfCancellationRequested();
+        ThrowIfClosedOrDisposed();
 
-        using var eventHandle = new ManualResetEvent(initialState: false);
-        using var _ = cancellationToken.Register(() => eventHandle.Set());
-        var overlapped = new NativeOverlapped
+        if (!vtsPool.Reader.TryRead(out var vts))
         {
-            EventHandle = eventHandle.SafeWaitHandle.DangerousGetHandle()
-        };
-        uint addrLen = (uint)(sizeof(DivertAddress) * addresses.Length);
-        fixed (byte* pBuffer = buffer)
-        fixed (DivertAddress* pAddr = addresses)
-        {
-            bool success = NativeMethods.WinDivertRecvEx(
-                Handle,
-                pBuffer, checked((uint)buffer.Length),
-                null,
-                0,
-                (WINDIVERT_ADDRESS*)pAddr,
-                &addrLen,
-                &overlapped);
-            if (!success)
-            {
-                int error = Marshal.GetLastWin32Error();
-                if (error == 997) // ERROR_IO_PENDING
-                {
-                    eventHandle.WaitOne();
-                    if (cancellationToken.IsCancellationRequested)
-                    {
-                        success = PInvoke.CancelIoEx(Handle, &overlapped);
-                        if (!success)
-                        {
-                            error = Marshal.GetLastWin32Error();
-                            if (error != 1168) // ERROR_NOT_FOUND
-                            {
-                                throw new Win32Exception(error);
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    throw new Win32Exception(error);
-                }
-            }
-            uint packetsLength;
-            success = PInvoke.GetOverlappedResult(Handle, &overlapped, &packetsLength, true);
-            if (!success)
-            {
-                int error = Marshal.GetLastWin32Error();
-                if (error == 995) // ERROR_OPERATION_ABORTED
-                {
-                    throw new OperationCanceledException();
-                }
-                else
-                {
-                    throw new Win32Exception(error);
-                }
-            }
-            int addressLength = (int)addrLen / sizeof(DivertAddress);
-            return ((int)packetsLength, addressLength);
+            vts = new DivertValueTaskSource(
+                vtsPool,
+                handle.Handle,
+                threadPoolBoundHandle,
+                runContinuationsAsynchronously: true
+            );
         }
-    }
-
-    public void Send(ReadOnlySpan<byte> buffer, DivertAddress address)
-    {
-        ThrowIfDisposed();
-
-        var divertAddress = address.Struct;
-        fixed (byte* pBuffer = buffer)
-        {
-            bool success = NativeMethods.WinDivertSend(
-                Handle,
-                pBuffer, checked((uint)buffer.Length),
-                null,
-                &divertAddress);
-            if (!success)
-            {
-                throw new Win32Exception(Marshal.GetLastWin32Error());
-            }
-        }
-    }
-
-    public void SendEx(
-        ReadOnlySpan<byte> buffer,
-        Span<DivertAddress> addresses,
-        CancellationToken cancellationToken = default)
-    {
-        ThrowIfDisposed();
-        cancellationToken.ThrowIfCancellationRequested();
-
-        using var eventHandle = new ManualResetEvent(initialState: false);
-        using var _ = cancellationToken.Register(() => eventHandle.Set());
-        var overlapped = new NativeOverlapped
-        {
-            EventHandle = eventHandle.SafeWaitHandle.DangerousGetHandle()
-        };
-        fixed (byte* pBuffer = buffer)
-        fixed (DivertAddress* pAddr = addresses)
-        {
-            bool success = NativeMethods.WinDivertSendEx(
-                Handle,
-                pBuffer, checked((uint)buffer.Length),
-                null,
-                0,
-                (WINDIVERT_ADDRESS*)pAddr,
-                (uint)(sizeof(WINDIVERT_ADDRESS) * addresses.Length),
-                &overlapped);
-            if (!success)
-            {
-                int error = Marshal.GetLastWin32Error();
-                if (error == 997) // ERROR_IO_PENDING
-                {
-                    eventHandle.WaitOne();
-                    if (cancellationToken.IsCancellationRequested)
-                    {
-                        success = PInvoke.CancelIoEx(Handle, &overlapped);
-                        if (!success)
-                        {
-                            error = Marshal.GetLastWin32Error();
-                            if (error != 1168) // ERROR_NOT_FOUND
-                            {
-                                throw new Win32Exception(error);
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    throw new Win32Exception(error);
-                }
-            }
-            uint bytesSent;
-            success = PInvoke.GetOverlappedResult(Handle, &overlapped, &bytesSent, true);
-            if (!success)
-            {
-                int error = Marshal.GetLastWin32Error();
-                if (error == 995) // ERROR_OPERATION_ABORTED
-                {
-                    throw new OperationCanceledException();
-                }
-                else
-                {
-                    throw new Win32Exception(error);
-                }
-            }
-        }
+        return vts.SendAsync(buffer, addresses, cancellationToken);
     }
 }

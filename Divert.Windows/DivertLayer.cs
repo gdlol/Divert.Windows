@@ -2,9 +2,9 @@ namespace Divert.Windows;
 
 public enum DivertLayer
 {
-    Network = 0,
-    Forward = 1,
-    Flow = 2,
-    Socket = 3,
-    Reflect = 4
+    Network = WINDIVERT_LAYER.WINDIVERT_LAYER_NETWORK,
+    Forward = WINDIVERT_LAYER.WINDIVERT_LAYER_NETWORK_FORWARD,
+    Flow = WINDIVERT_LAYER.WINDIVERT_LAYER_FLOW,
+    Socket = WINDIVERT_LAYER.WINDIVERT_LAYER_SOCKET,
+    Reflect = WINDIVERT_LAYER.WINDIVERT_LAYER_REFLECT,
 }

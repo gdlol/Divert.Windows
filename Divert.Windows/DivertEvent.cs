@@ -2,14 +2,14 @@ namespace Divert.Windows;
 
 public enum DivertEvent
 {
-    NetworkPacket = 0,
-    FlowEstablished = 1,
-    FlowDeleted = 2,
-    SocketBind = 3,
-    SocketConnect = 4,
-    SocketListen = 5,
-    SocketAccept = 6,
-    SocketClose = 7,
-    ReflectOpen = 8,
-    ReflectClose = 9,
+    NetworkPacket = WINDIVERT_EVENT.WINDIVERT_EVENT_NETWORK_PACKET,
+    FlowEstablished = WINDIVERT_EVENT.WINDIVERT_EVENT_FLOW_ESTABLISHED,
+    FlowDeleted = WINDIVERT_EVENT.WINDIVERT_EVENT_FLOW_DELETED,
+    SocketBind = WINDIVERT_EVENT.WINDIVERT_EVENT_SOCKET_BIND,
+    SocketConnect = WINDIVERT_EVENT.WINDIVERT_EVENT_SOCKET_CONNECT,
+    SocketListen = WINDIVERT_EVENT.WINDIVERT_EVENT_SOCKET_LISTEN,
+    SocketAccept = WINDIVERT_EVENT.WINDIVERT_EVENT_SOCKET_ACCEPT,
+    SocketClose = WINDIVERT_EVENT.WINDIVERT_EVENT_SOCKET_CLOSE,
+    ReflectOpen = WINDIVERT_EVENT.WINDIVERT_EVENT_REFLECT_OPEN,
+    ReflectClose = WINDIVERT_EVENT.WINDIVERT_EVENT_REFLECT_CLOSE,
 }

@@ -1,0 +1,8 @@
+.*
+_*
+!.devcontainer/
+!**/.devcontainer/**
+!.config/
+!**/.config/**
+
+node_modules/

@@ -8,5 +8,5 @@ public enum DivertHelperFlags
     NoICMPChecksum = 2,
     NoICMPv6Checksum = 4,
     NoTCPChecksum = 8,
-    NoUDPChecksum = 16
+    NoUDPChecksum = 16,
 }
