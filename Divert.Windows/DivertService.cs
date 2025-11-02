@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Threading.Channels;
+using Divert.Windows.AsyncOperation;
 using Windows.Win32.Foundation;
 
 namespace Divert.Windows;
@@ -10,10 +11,11 @@ namespace Divert.Windows;
 /// </summary>
 public sealed unsafe class DivertService : IDisposable
 {
-    private readonly DivertHandle handle;
+    private readonly DivertHandle divertHandle;
 
     private readonly ThreadPoolBoundHandle threadPoolBoundHandle;
-    private readonly Channel<DivertValueTaskSource> vtsPool = Channel.CreateUnbounded<DivertValueTaskSource>();
+    private readonly Channel<DivertReceiveValueTaskSource> receiveVtsPool;
+    private readonly Channel<DivertSendValueTaskSource> sendVtsPool;
 
     /// <summary>
     /// Opens a WinDivert handle for the given filter.
@@ -53,50 +55,39 @@ public sealed unsafe class DivertService : IDisposable
         {
             throw new Win32Exception(Marshal.GetLastPInvokeError());
         }
-        this.handle = new DivertHandle(handle);
-        threadPoolBoundHandle = ThreadPoolBoundHandle.BindHandle(this.handle);
+        divertHandle = new DivertHandle(handle);
+        threadPoolBoundHandle = ThreadPoolBoundHandle.BindHandle(divertHandle);
+        receiveVtsPool = Channel.CreateUnbounded<DivertReceiveValueTaskSource>();
+        sendVtsPool = Channel.CreateUnbounded<DivertSendValueTaskSource>();
     }
 
     private bool disposed = false;
-    private bool closed = false;
 
-    private void Close(bool throwOnError)
+    private static void DisposeVtsPool<T>(Channel<T> vtsPool)
+        where T : IDisposable
     {
-        if (!closed)
+        vtsPool.Writer.TryComplete();
+        while (vtsPool.Reader.TryRead(out var vts))
         {
-            bool success = NativeMethods.WinDivertClose(handle.Handle);
-            if (!success && throwOnError)
-            {
-                throw new Win32Exception(Marshal.GetLastPInvokeError());
-            }
-            closed = true;
+            vts.Dispose();
         }
     }
-
-    /// <summary>
-    /// Closes the WinDivert handle.
-    /// </summary>
-    public void Close() => Close(throwOnError: true);
 
     /// <summary>
     /// Releases all resources used by the <see cref="DivertService"/>.
     /// </summary>
     public void Dispose()
     {
-        if (!disposed)
+        if (disposed)
         {
-            if (vtsPool.Writer.TryComplete())
-            {
-                while (vtsPool.Reader.TryRead(out var vts))
-                {
-                    vts.Dispose();
-                }
-            }
-            threadPoolBoundHandle.Dispose();
-            handle.Dispose();
-            Close(throwOnError: false);
-            disposed = true;
+            return;
         }
+        disposed = true;
+
+        DisposeVtsPool(receiveVtsPool);
+        DisposeVtsPool(sendVtsPool);
+        threadPoolBoundHandle.Dispose();
+        divertHandle.Dispose();
         GC.SuppressFinalize(this);
     }
 
@@ -105,24 +96,16 @@ public sealed unsafe class DivertService : IDisposable
         Dispose();
     }
 
-    private void ThrowIfClosedOrDisposed()
-    {
-        if (closed)
-        {
-            throw new InvalidOperationException(nameof(closed));
-        }
-        ObjectDisposedException.ThrowIf(disposed, this);
-    }
-
     /// <summary>
     /// Shuts down the WinDivert handle.
     /// </summary>
     /// <param name="how">Specifies how to shut down the handle.</param>
     public void Shutdown(DivertShutdown how)
     {
-        ThrowIfClosedOrDisposed();
+        ObjectDisposedException.ThrowIf(disposed, this);
 
-        bool success = NativeMethods.WinDivertShutdown(handle.Handle, (WINDIVERT_SHUTDOWN)how);
+        using var _ = divertHandle.GetReference(out var handle);
+        bool success = NativeMethods.WinDivertShutdown(handle, (WINDIVERT_SHUTDOWN)how);
         if (!success)
         {
             throw new Win32Exception(Marshal.GetLastPInvokeError());
@@ -142,13 +125,17 @@ public sealed unsafe class DivertService : IDisposable
         CancellationToken cancellationToken = default
     )
     {
-        ThrowIfClosedOrDisposed();
-
-        if (!vtsPool.Reader.TryRead(out var vts))
+        ObjectDisposedException.ThrowIf(disposed, this);
+        if (cancellationToken.IsCancellationRequested)
         {
-            vts = new DivertValueTaskSource(
-                vtsPool,
-                handle.Handle,
+            return ValueTask.FromCanceled<DivertReceiveResult>(cancellationToken);
+        }
+
+        if (!receiveVtsPool.Reader.TryRead(out var vts))
+        {
+            vts = new DivertReceiveValueTaskSource(
+                receiveVtsPool,
+                divertHandle,
                 threadPoolBoundHandle,
                 runContinuationsAsynchronously: true
             );
@@ -169,13 +156,17 @@ public sealed unsafe class DivertService : IDisposable
         CancellationToken cancellationToken = default
     )
     {
-        ThrowIfClosedOrDisposed();
-
-        if (!vtsPool.Reader.TryRead(out var vts))
+        ObjectDisposedException.ThrowIf(disposed, this);
+        if (cancellationToken.IsCancellationRequested)
         {
-            vts = new DivertValueTaskSource(
-                vtsPool,
-                handle.Handle,
+            return ValueTask.FromCanceled(cancellationToken);
+        }
+
+        if (!sendVtsPool.Reader.TryRead(out var vts))
+        {
+            vts = new DivertSendValueTaskSource(
+                sendVtsPool,
+                divertHandle,
                 threadPoolBoundHandle,
                 runContinuationsAsynchronously: true
             );

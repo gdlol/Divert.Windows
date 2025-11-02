@@ -11,4 +11,8 @@ public class Context(ICakeContext context) : FrostingContext(context)
     public static string ProjectRoot => new FileInfo(GetFilePath()).Directory!.Parent!.FullName;
 
     public static string Workspaces => new DirectoryInfo(ProjectRoot).Parent!.FullName;
+
+    public static string LocalDirectory => Path.Combine(ProjectRoot, ".local");
+
+    public static string LocalWindowsDirectory => Path.Combine(LocalDirectory, "windows");
 }

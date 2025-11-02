@@ -5,14 +5,24 @@
   "gitignoreRoot": ".",
   "ignorePaths": ["LICENSE"],
   "words": [
+    "CIFS",
     "csharpierignore",
     "csharpierrc",
     "devcontainer",
     "devcontainers",
+    "getgid",
+    "getuid",
     "globalconfig",
+    "globaltool",
+    "libc",
     "msbuild",
+    "MSTEST",
     "packagejson",
+    "reportgenerator",
     "runas",
+    "runsettings",
+    "statvfs",
+    "Syscall",
     "WINDIVERT"
   ]
 }

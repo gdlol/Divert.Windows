@@ -25,7 +25,8 @@
           "ignore": "ignore",
           "attributes": "properties",
           "rc": "properties",
-          "*.globalconfig": "ini"
+          "*.globalconfig": "ini",
+          "app.manifest": "xml"
         },
         "editor.formatOnSave": true,
         "editor.defaultFormatter": "esbenp.prettier-vscode",

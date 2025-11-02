@@ -2,10 +2,13 @@ services:
   devcontainer:
     env_file:
       - .env
+      - path: ../.local/.env
+        required: false
     build:
       context: .
       dockerfile: Dockerfile
     init: true
+    privileged: true
     volumes:
       - WORKSPACES:${WORKSPACES}
       - ..:${WORKSPACES}/divert-windows

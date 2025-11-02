@@ -26,15 +26,15 @@ if (!principal.IsInRole(WindowsBuiltInRole.Administrator))
 string? remoteIP = args.Length > 0 ? args[0] : null;
 if (remoteIP is null)
 {
-    var gateway = NetworkInterface
-        .GetAllNetworkInterfaces()
-        .Where(nic =>
-            nic.OperationalStatus == OperationalStatus.Up && nic.NetworkInterfaceType != NetworkInterfaceType.Loopback
-        )
-        .SelectMany(nic => nic.GetIPProperties()?.GatewayAddresses?.ToArray() ?? [])
-        .Select(g => g.Address)
-        .FirstOrDefault(address => address.AddressFamily == AddressFamily.InterNetwork);
-    remoteIP = gateway?.ToString();
+    var gateWays =
+        from nic in NetworkInterface.GetAllNetworkInterfaces()
+        where
+            nic is { OperationalStatus: OperationalStatus.Up, NetworkInterfaceType: not NetworkInterfaceType.Loopback }
+        from gateway in nic.GetIPProperties().GatewayAddresses
+        let address = gateway.Address
+        where address is { AddressFamily: AddressFamily.InterNetwork }
+        select address;
+    remoteIP = gateWays.FirstOrDefault()?.ToString();
 }
 remoteIP ??= "1.1.1.1";
 

@@ -2,9 +2,9 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
-    <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    <OutputPath>$(ProjectRoot).local/Ping</OutputPath>
+    <SelfContained>true</SelfContained>
+    <OutputPath>$(ProjectRoot).local/windows/$(MSBuildThisFileName)</OutputPath>
     <NoWarn>CA2007</NoWarn>
   </PropertyGroup>
 

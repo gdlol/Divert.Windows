@@ -1,0 +1,24 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <OutputPath>$(ProjectRoot).local/windows/$(MSBuildThisFileName)</OutputPath>
+    <NoWarn>CA2007</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Divert.Windows.Tests/Divert.Windows.Tests.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None
+      Include="$(ProjectRoot)Divert.Windows/**/*.cs"
+      CopyToOutputDirectory="PreserveNewest"
+      LinkBase="Divert.Windows/"
+    />
+    <None Include="CoverageSettings.xml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

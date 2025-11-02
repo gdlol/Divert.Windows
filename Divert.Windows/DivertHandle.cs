@@ -4,13 +4,11 @@ namespace Divert.Windows;
 
 internal sealed class DivertHandle : SafeHandleZeroOrMinusOneIsInvalid
 {
-    internal IntPtr Handle => handle;
-
     public DivertHandle(IntPtr handle)
-        : base(ownsHandle: false)
+        : base(ownsHandle: true)
     {
         this.handle = handle;
     }
 
-    protected override bool ReleaseHandle() => true;
+    protected override bool ReleaseHandle() => NativeMethods.WinDivertClose(handle);
 }
