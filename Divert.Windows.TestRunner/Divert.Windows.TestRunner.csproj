@@ -10,7 +10,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../Divert.Windows.Tests/Divert.Windows.Tests.csproj" />
+    <ProjectReference Include="../Divert.Windows.Tests/Divert.Windows.Tests.csproj">
+      <IncludeAssets>none</IncludeAssets>
+    </ProjectReference>
   </ItemGroup>
 
   <ItemGroup>

@@ -1,4 +1,5 @@
-using System.Threading.Channels;
+using System.Net.Sockets;
+using Cake.Common.Diagnostics;
 using Cake.Common.Tools.DotNet;
 using Cake.Common.Tools.DotNet.Tool;
 using Cake.Core.Diagnostics;
@@ -8,13 +9,22 @@ using Path = System.IO.Path;
 
 namespace Automation;
 
-internal static class Test
+public class Test : AsyncFrostingTask<Context>
 {
+    public const string TEST_HOST = nameof(TEST_HOST);
+    public const string TestProjectName = "Divert.Windows.Tests";
+    public const string TestRunnerProjectName = "Divert.Windows.TestRunner";
+
+    public static string GetTestHost() => Environment.GetEnvironmentVariable(TEST_HOST) ?? "host.docker.internal";
+
     public static string TestResultsDirectory => Path.Combine(Context.LocalWindowsDirectory, "TestResults");
 
     public static string CoverletOutput => Path.Combine(TestResultsDirectory, "coverage.cobertura.xml");
 
     public static string TestReportsDirectory => Path.Combine(Context.LocalDirectory, "TestReports");
+
+    public static string TestRunnerLockFilePath =>
+        Path.Combine(Context.LocalWindowsDirectory, $"{TestRunnerProjectName}/TestRunner.lock");
 
     public static void GenerateReport(Context context)
     {
@@ -37,6 +47,52 @@ internal static class Test
             }
         );
     }
+
+    public override async Task RunAsync(Context context)
+    {
+        context.DotNetBuild(Path.Combine(Context.ProjectRoot, TestProjectName));
+        if (!Directory.Exists(Path.Combine(Context.LocalWindowsDirectory, TestRunnerProjectName)))
+        {
+            context.DotNetBuild(Path.Combine(Context.ProjectRoot, TestRunnerProjectName));
+        }
+
+        context.Information($"Waiting for test runner lock file {TestRunnerLockFilePath}...");
+        int port = 0;
+        while (port is 0)
+        {
+            try
+            {
+                string text = await File.ReadAllTextAsync(TestRunnerLockFilePath);
+                port = int.Parse(text);
+                break;
+            }
+            catch
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(1000));
+            }
+        }
+
+        using var client = new TcpClient();
+        await client.ConnectAsync(GetTestHost(), port);
+        using var stream = client.GetStream();
+        using var reader = new StreamReader(stream);
+        string lastLine = string.Empty;
+        while (true)
+        {
+            string? line = await reader.ReadLineAsync();
+            if (line is null)
+            {
+                break;
+            }
+            lastLine = line;
+            Console.WriteLine(line);
+        }
+        if (!int.TryParse(lastLine, out int exitCode) || exitCode != 0)
+        {
+            throw new Exception("Tests failed");
+        }
+        GenerateReport(context);
+    }
 }
 
 public class TestReport : FrostingTask<Context>
@@ -44,58 +100,5 @@ public class TestReport : FrostingTask<Context>
     public override void Run(Context context)
     {
         Test.GenerateReport(context);
-    }
-}
-
-public class TestReportWatch : AsyncFrostingTask<Context>
-{
-    public override async Task RunAsync(Context context)
-    {
-        var changed = Channel.CreateBounded<byte>(10);
-        using var watcher = new FileSystemWatcher
-        {
-            Path = Context.LocalWindowsDirectory,
-            Filter = "coverage.cobertura.xml",
-            EnableRaisingEvents = true,
-            IncludeSubdirectories = false,
-            NotifyFilter = NotifyFilters.LastWrite,
-        };
-        watcher.Changed += (_, e) => changed.Writer.TryWrite(0);
-
-        var poll = Task.Run(async () =>
-        {
-            while (changed.Writer.TryWrite(0))
-            {
-                await Task.Delay(TimeSpan.FromMilliseconds(1000));
-            }
-        });
-
-        var exit = Task.Run(() =>
-        {
-            Console.ReadLine();
-            context.Log.Information("Stopping coverage report watcher...");
-            changed.Writer.TryComplete();
-        });
-
-        DateTimeOffset? lastChanged = null;
-        await foreach (var _ in changed.Reader.ReadAllAsync())
-        {
-            try
-            {
-                var offset = new DateTimeOffset(File.GetLastWriteTime(Test.CoverletOutput));
-                if (lastChanged != offset)
-                {
-                    lastChanged = offset;
-                    context.Log.Information("Detected change to coverage file, regenerating report...");
-                    Test.GenerateReport(context);
-                }
-            }
-            catch (Exception e)
-            {
-                context.Log.Error("Error regenerating report: {0}", e);
-            }
-        }
-        await Task.WhenAll(poll, exit);
-        context.Log.Information("Coverage report watcher stopped.");
     }
 }

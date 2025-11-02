@@ -1,3 +1,4 @@
+using Cake.Common.Diagnostics;
 using Cake.Common.Tools.Command;
 using Cake.Core;
 using Cake.Core.Diagnostics;
@@ -40,7 +41,7 @@ public class CIFSMount : FrostingTask<Context>
         var config = LoadConfig();
         if (config is null)
         {
-            context.Log.Information("CIFS share not configured, skipping.");
+            context.Information("CIFS share not configured, skipping.");
             return;
         }
 
@@ -49,7 +50,7 @@ public class CIFSMount : FrostingTask<Context>
         {
             if (DriveInfo.GetDrives().Any(drive => drive.DriveType is DriveType.Network && drive.Name == mountPath))
             {
-                context.Log.Information("CIFS share already mounted at {0}, skipping.", mountPath);
+                context.Information("CIFS share already mounted at {0}, skipping.", mountPath);
                 // Already mounted.
                 return;
             }
@@ -69,7 +70,7 @@ public class CIFSMount : FrostingTask<Context>
         }
         catch (Exception ex)
         {
-            context.Log.Warning("Failed to mount CIFS share: {0}", ex.Message);
+            context.Warning("Failed to mount CIFS share: {0}", ex.Message);
         }
     }
 }

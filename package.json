@@ -7,8 +7,8 @@
     "format": "pnpm run cake Format",
     "lint": "pnpm run cake Lint",
     "restore": "pnpm run cake Restore",
-    "test-report": "pnpm run cake TestReport",
-    "test-report-watch": "pnpm run cake TestReportWatch"
+    "test": "pnpm run cake Test",
+    "test-report": "pnpm run cake TestReport"
   },
   "dependencies": {
     "@prettier/plugin-xml": "^3.4.2",

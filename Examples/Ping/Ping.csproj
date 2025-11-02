@@ -4,7 +4,7 @@
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
-    <OutputPath>$(ProjectRoot).local/windows/$(MSBuildThisFileName)</OutputPath>
+    <OutputPath>$(ProjectRoot).local/windows/Examples/$(MSBuildThisFileName)</OutputPath>
     <NoWarn>CA2007</NoWarn>
   </PropertyGroup>
 
