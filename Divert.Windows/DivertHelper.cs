@@ -5,7 +5,7 @@ namespace Divert.Windows;
 
 public static unsafe class DivertHelper
 {
-    public static void CalculateChecksums(Span<byte> packet, DivertHelperFlags flags)
+    public static void CalculateChecksums(Span<byte> packet, DivertHelperFlags flags = DivertHelperFlags.None)
     {
         fixed (byte* pPacket = packet)
         {

@@ -124,8 +124,11 @@ try
 
         await process.WaitForExitAsync(token);
         lines.Writer.Complete();
-        await Task.WhenAll(readStdOutTask, readStdErrTask, writeTask);
-        await writer.WriteLineAsync(process.ExitCode.ToString().AsMemory(), token);
+        await Task.WhenAll(readStdOutTask, readStdErrTask, writeTask)
+            .ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+        await writer
+            .WriteLineAsync(process.ExitCode.ToString().AsMemory(), token)
+            .ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
     }
 }
 catch (OperationCanceledException) when (token.IsCancellationRequested) { }

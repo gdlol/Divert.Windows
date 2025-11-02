@@ -16,11 +16,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None
-      Include="$(ProjectRoot)Divert.Windows/**/*.cs"
-      CopyToOutputDirectory="PreserveNewest"
-      LinkBase="Divert.Windows/"
-    />
     <None Include="CoverageSettings.xml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

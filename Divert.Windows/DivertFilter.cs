@@ -112,6 +112,19 @@ public partial class DivertFilter
         return Clause;
     }
 
+    public override bool Equals(object? obj)
+    {
+        return obj switch
+        {
+            null => false,
+            DivertFilter filter => Clause == filter.Clause,
+            string s => Clause == s,
+            _ => false,
+        };
+    }
+
+    public override int GetHashCode() => Clause.GetHashCode();
+
     public class Field
     {
         private readonly string field;
@@ -134,7 +147,7 @@ public partial class DivertFilter
             };
         }
 
-        public override int GetHashCode() => base.GetHashCode();
+        public override int GetHashCode() => field.GetHashCode();
 
         public override string ToString() => field;
 
@@ -162,10 +175,6 @@ public partial class DivertFilter
 
         public static DivertFilter operator !(Field value)
         {
-            if (MatchAndPattern(value.field) || MatchOrPattern(value.field))
-            {
-                value = new Field($"({value.field})");
-            }
             string clause = $"not {value}";
             return new DivertFilter(clause);
         }

@@ -21,4 +21,12 @@
   <ItemGroup>
     <ProjectReference Include="../Divert.Windows/Divert.Windows.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <None
+      Include="../Divert.Windows/**/*.cs"
+      CopyToOutputDirectory="PreserveNewest"
+      LinkBase="Divert.Windows/"
+    />
+  </ItemGroup>
 </Project>
