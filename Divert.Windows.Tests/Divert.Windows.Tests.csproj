@@ -23,10 +23,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None
-      Include="../Divert.Windows/**/*.cs"
-      CopyToOutputDirectory="PreserveNewest"
-      LinkBase="Divert.Windows/"
-    />
+    <None Include="../Divert.Windows/**/*.cs" CopyToOutputDirectory="PreserveNewest" LinkBase="Divert.Windows/" />
   </ItemGroup>
 </Project>

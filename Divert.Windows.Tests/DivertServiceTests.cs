@@ -103,4 +103,80 @@ public sealed class DivertServiceTests : IDisposable
         Assert.AreNotEqual(token, exception.CancellationToken);
         Assert.AreEqual(CancellationToken.None, exception.CancellationToken);
     }
+
+    [TestMethod]
+    public async Task CancelReceive()
+    {
+        using var listener = CreateUdpListener(out int port);
+
+        var filter =
+            DivertFilter.UDP
+            & DivertFilter.Loopback
+            & DivertFilter.Ip
+            & !DivertFilter.Impostor
+            & (DivertFilter.RemotePort == port);
+        using var service = new DivertService(filter);
+
+        var packetBuffer = new byte[ushort.MaxValue + 40];
+        var addressBuffer = new DivertAddress[1];
+
+        // Cancel before receive
+        {
+            using var cts = new CancellationTokenSource();
+            cts.Cancel();
+            var token = cts.Token;
+            var divertReceive = service.ReceiveAsync(packetBuffer, addressBuffer, token).AsTask();
+            Assert.IsTrue(divertReceive.IsCanceled);
+        }
+
+        // Cancel on receive
+        using (var pipe = new ExecutorDelayPipe())
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(this.token);
+            var token = cts.Token;
+
+            var divertReceive = Task.Run(async () => await service.ReceiveAsync(packetBuffer, addressBuffer, token));
+            Assert.IsFalse(divertReceive.IsCompleted);
+
+            await pipe.Stream.WaitForConnectionAsync(token);
+            cts.Cancel();
+            Assert.IsFalse(divertReceive.IsCompleted);
+            pipe.Stream.WriteByte(0);
+            await pipe.Stream.FlushAsync(token);
+            pipe.Stream.Disconnect();
+
+            var exception = await Assert.ThrowsAsync<OperationCanceledException>(async () => await divertReceive);
+            Assert.IsTrue(token.IsCancellationRequested);
+            Assert.AreEqual(token, exception.CancellationToken);
+        }
+
+        // Cancel pending receive
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(this.token);
+            var token = cts.Token;
+
+            var divertReceive = service.ReceiveAsync(packetBuffer, addressBuffer, token).AsTask();
+            Assert.IsFalse(divertReceive.IsCompleted);
+
+            cts.Cancel();
+            var exception = await Assert.ThrowsAsync<OperationCanceledException>(async () => await divertReceive);
+            Assert.IsTrue(token.IsCancellationRequested);
+            Assert.AreEqual(token, exception.CancellationToken);
+        }
+    }
+
+    [TestMethod]
+    public void CancelSend()
+    {
+        using var service = new DivertService(DivertFilter.False);
+
+        var packetBuffer = new byte[100];
+        var addressBuffer = new DivertAddress[1];
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(this.token);
+        var token = cts.Token;
+        cts.Cancel();
+        var divertSend = service.SendAsync(packetBuffer, addressBuffer, token).AsTask();
+        Assert.IsTrue(divertSend.IsCanceled);
+    }
 }

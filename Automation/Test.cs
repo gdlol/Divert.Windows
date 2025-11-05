@@ -50,7 +50,19 @@ public class Test : AsyncFrostingTask<Context>
 
     public override async Task RunAsync(Context context)
     {
-        context.DotNetBuild(Path.Combine(Context.ProjectRoot, TestProjectName));
+        context.DotNetBuild(
+            Path.Combine(Context.ProjectRoot, TestProjectName),
+            new()
+            {
+                MSBuildSettings = new()
+                {
+                    Properties =
+                    {
+                        ["DivertWindowsTests"] = ["true"], // Enable DivertValueTaskExecutorDelay
+                    },
+                },
+            }
+        );
         if (!Directory.Exists(Path.Combine(Context.LocalWindowsDirectory, TestRunnerProjectName)))
         {
             context.DotNetBuild(Path.Combine(Context.ProjectRoot, TestRunnerProjectName));

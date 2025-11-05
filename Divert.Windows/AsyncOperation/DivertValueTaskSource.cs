@@ -6,11 +6,6 @@ using Windows.Win32.Foundation;
 
 namespace Divert.Windows.AsyncOperation;
 
-internal interface IDivertValueTaskExecutor
-{
-    bool Execute(SafeHandle safeHandle, ref readonly PendingOperation pendingOperation);
-}
-
 internal unsafe class DivertValueTaskSource : IDisposable, IValueTaskSource<int>, IOCompletionHandler
 {
     private readonly Channel<DivertValueTaskSource> pool;
@@ -120,6 +115,7 @@ internal unsafe class DivertValueTaskSource : IDisposable, IValueTaskSource<int>
         ref readonly var pendingOperation = ref PrepareOperation(buffer, addresses, cancellationToken);
         try
         {
+            executor.DelayExecutionInTests();
             bool success = executor.Execute(SafeHandle, in pendingOperation);
             if (!success)
             {

@@ -4,6 +4,10 @@
     <Platforms>x64</Platforms>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(DivertWindowsTests)' == 'true'">
+    <DefineConstants>$(DefineConstants);DIVERT_WINDOWS_TESTS</DefineConstants>
+  </PropertyGroup>
+
   <PropertyGroup Condition="$(Configuration) != Release">
     <PathMap>$(MSBuildProjectDirectory)=$(MSBuildProjectName)</PathMap>
   </PropertyGroup>
