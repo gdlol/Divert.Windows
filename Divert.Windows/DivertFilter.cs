@@ -179,37 +179,37 @@ public partial class DivertFilter
             return new DivertFilter(clause);
         }
 
-        public static DivertFilter operator ==(Field left, string right)
+        public static DivertFilter operator ==(Field left, object right)
         {
             string clause = $"{left} = {right}";
             return new DivertFilter(clause);
         }
 
-        public static DivertFilter operator !=(Field left, string right)
+        public static DivertFilter operator !=(Field left, object right)
         {
             string clause = $"{left} != {right}";
             return new DivertFilter(clause);
         }
 
-        public static DivertFilter operator <(Field left, string right)
+        public static DivertFilter operator <(Field left, object right)
         {
             string clause = $"{left} < {right}";
             return new DivertFilter(clause);
         }
 
-        public static DivertFilter operator >(Field left, string right)
+        public static DivertFilter operator >(Field left, object right)
         {
             string clause = $"{left} > {right}";
             return new DivertFilter(clause);
         }
 
-        public static DivertFilter operator <=(Field left, string right)
+        public static DivertFilter operator <=(Field left, object right)
         {
             string clause = $"{left} <= {right}";
             return new DivertFilter(clause);
         }
 
-        public static DivertFilter operator >=(Field left, string right)
+        public static DivertFilter operator >=(Field left, object right)
         {
             string clause = $"{left} >= {right}";
             return new DivertFilter(clause);

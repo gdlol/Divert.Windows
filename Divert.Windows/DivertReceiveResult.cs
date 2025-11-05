@@ -1,7 +1,14 @@
 namespace Divert.Windows;
 
-public readonly struct DivertReceiveResult(int length, Memory<DivertAddress> addresses)
+public readonly struct DivertReceiveResult(int dataLength, int addressLength)
 {
-    public int Length => length;
-    public Memory<DivertAddress> Addresses => addresses;
+    /// <summary>
+    /// Gets the length of the received data.
+    /// </summary>
+    public int DataLength { get; } = dataLength;
+
+    /// <summary>
+    /// Gets the length of the addresses.
+    /// </summary>
+    public int AddressLength { get; } = addressLength;
 }

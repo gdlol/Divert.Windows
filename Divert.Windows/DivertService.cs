@@ -12,10 +12,13 @@ namespace Divert.Windows;
 public sealed unsafe class DivertService : IDisposable
 {
     private readonly DivertHandle divertHandle;
+    private readonly bool runContinuationsAsynchronously;
 
     private readonly ThreadPoolBoundHandle threadPoolBoundHandle;
-    private readonly Channel<DivertReceiveValueTaskSource> receiveVtsPool;
-    private readonly Channel<DivertSendValueTaskSource> sendVtsPool;
+    private readonly Channel<DivertValueTaskSource> sendVtsPool;
+    private readonly Channel<DivertValueTaskSource> receiveVtsPool;
+    private readonly DivertReceiveExecutor receiveExecutor;
+    private readonly DivertSendExecutor sendExecutor;
 
     /// <summary>
     /// Opens a WinDivert handle for the given filter.
@@ -28,7 +31,8 @@ public sealed unsafe class DivertService : IDisposable
         DivertFilter filter,
         DivertLayer layer = DivertLayer.Network,
         short priority = 0,
-        DivertFlags flags = DivertFlags.None
+        DivertFlags flags = DivertFlags.None,
+        bool runContinuationsAsynchronously = true
     )
     {
         ArgumentNullException.ThrowIfNull(filter);
@@ -56,18 +60,20 @@ public sealed unsafe class DivertService : IDisposable
             throw new Win32Exception(Marshal.GetLastPInvokeError());
         }
         divertHandle = new DivertHandle(handle);
+        this.runContinuationsAsynchronously = runContinuationsAsynchronously;
         threadPoolBoundHandle = ThreadPoolBoundHandle.BindHandle(divertHandle);
-        receiveVtsPool = Channel.CreateUnbounded<DivertReceiveValueTaskSource>();
-        sendVtsPool = Channel.CreateUnbounded<DivertSendValueTaskSource>();
+        sendVtsPool = Channel.CreateUnbounded<DivertValueTaskSource>();
+        receiveVtsPool = Channel.CreateUnbounded<DivertValueTaskSource>();
+        receiveExecutor = new DivertReceiveExecutor();
+        sendExecutor = new DivertSendExecutor();
     }
 
     private bool disposed = false;
 
-    private static void DisposeVtsPool<T>(Channel<T> vtsPool)
-        where T : IDisposable
+    private static void DisposeVtsPool(Channel<DivertValueTaskSource> pool)
     {
-        vtsPool.Writer.TryComplete();
-        while (vtsPool.Reader.TryRead(out var vts))
+        pool.Writer.TryComplete();
+        while (pool.Reader.TryRead(out var vts))
         {
             vts.Dispose();
         }
@@ -84,32 +90,24 @@ public sealed unsafe class DivertService : IDisposable
         }
         disposed = true;
 
-        DisposeVtsPool(receiveVtsPool);
         DisposeVtsPool(sendVtsPool);
+        DisposeVtsPool(receiveVtsPool);
         threadPoolBoundHandle.Dispose();
         divertHandle.Dispose();
-        GC.SuppressFinalize(this);
     }
 
-    ~DivertService()
+    private DivertValueTaskSource GetVts(Channel<DivertValueTaskSource> vtsPool)
     {
-        Dispose();
-    }
-
-    /// <summary>
-    /// Shuts down the WinDivert handle.
-    /// </summary>
-    /// <param name="how">Specifies how to shut down the handle.</param>
-    public void Shutdown(DivertShutdown how)
-    {
-        ObjectDisposedException.ThrowIf(disposed, this);
-
-        using var _ = divertHandle.GetReference(out var handle);
-        bool success = NativeMethods.WinDivertShutdown(handle, (WINDIVERT_SHUTDOWN)how);
-        if (!success)
+        if (!vtsPool.Reader.TryRead(out var vts))
         {
-            throw new Win32Exception(Marshal.GetLastPInvokeError());
+            vts = new DivertValueTaskSource(
+                sendVtsPool,
+                divertHandle,
+                threadPoolBoundHandle,
+                runContinuationsAsynchronously
+            );
         }
+        return vts;
     }
 
     /// <summary>
@@ -131,16 +129,8 @@ public sealed unsafe class DivertService : IDisposable
             return ValueTask.FromCanceled<DivertReceiveResult>(cancellationToken);
         }
 
-        if (!receiveVtsPool.Reader.TryRead(out var vts))
-        {
-            vts = new DivertReceiveValueTaskSource(
-                receiveVtsPool,
-                divertHandle,
-                threadPoolBoundHandle,
-                runContinuationsAsynchronously: true
-            );
-        }
-        return vts.ReceiveAsync(buffer, addresses, cancellationToken);
+        var vts = GetVts(receiveVtsPool);
+        return receiveExecutor.ReceiveAsync(vts, buffer, addresses, cancellationToken);
     }
 
     /// <summary>
@@ -150,7 +140,7 @@ public sealed unsafe class DivertService : IDisposable
     /// <param name="addresses">Addresses of the packets to be injected.</param>
     /// <param name="cancellationToken">Token to observe cancellation requests.</param>
     /// <returns>A ValueTask representing the asynchronous send operation.</returns>
-    public ValueTask SendAsync(
+    public ValueTask<int> SendAsync(
         ReadOnlyMemory<byte> buffer,
         ReadOnlyMemory<DivertAddress> addresses,
         CancellationToken cancellationToken = default
@@ -159,18 +149,10 @@ public sealed unsafe class DivertService : IDisposable
         ObjectDisposedException.ThrowIf(disposed, this);
         if (cancellationToken.IsCancellationRequested)
         {
-            return ValueTask.FromCanceled(cancellationToken);
+            return ValueTask.FromCanceled<int>(cancellationToken);
         }
 
-        if (!sendVtsPool.Reader.TryRead(out var vts))
-        {
-            vts = new DivertSendValueTaskSource(
-                sendVtsPool,
-                divertHandle,
-                threadPoolBoundHandle,
-                runContinuationsAsynchronously: true
-            );
-        }
-        return vts.SendAsync(buffer, addresses, cancellationToken);
+        var vts = GetVts(sendVtsPool);
+        return sendExecutor.SendAsync(vts, buffer, addresses, cancellationToken);
     }
 }

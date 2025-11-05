@@ -1,135 +1,145 @@
-using Windows.Win32;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Threading.Channels;
+using System.Threading.Tasks.Sources;
+using Windows.Win32.Foundation;
 
 namespace Divert.Windows.AsyncOperation;
 
-internal abstract unsafe class DivertValueTaskSource : IDisposable
+internal interface IDivertValueTaskExecutor
 {
-    private static class Status
-    {
-        public const uint Idle = 0;
-        public const uint Canceled = 1;
-        public const uint Pending = 2;
-        public const uint Disposed = 3;
-    }
+    bool Execute(SafeHandle safeHandle, ref readonly PendingOperation pendingOperation);
+}
 
-    private static readonly IOCompletionCallback ioCompletionCallback = OnIOCompleted;
+internal unsafe class DivertValueTaskSource : IDisposable, IValueTaskSource<int>, IOCompletionHandler
+{
+    private readonly Channel<DivertValueTaskSource> pool;
+    private readonly IOCompletionOperation<DivertValueTaskSource> ioCompletionOperation;
 
-    private readonly DivertHandle divertHandle;
-    private readonly ThreadPoolBoundHandle threadPoolBoundHandle;
-    private readonly PreAllocatedOverlapped preAllocatedOverlapped;
-
-    private IntPtr nativeOverlapped;
+    private ManualResetValueTaskSourceCore<int> source;
     private PendingOperation pendingOperation;
-    private uint status;
 
-    protected DivertHandle DivertHandle => divertHandle;
-
-    public DivertValueTaskSource(DivertHandle divertHandle, ThreadPoolBoundHandle threadPoolBoundHandle)
+    public DivertValueTaskSource(
+        Channel<DivertValueTaskSource> pool,
+        DivertHandle divertHandle,
+        ThreadPoolBoundHandle threadPoolBoundHandle,
+        bool runContinuationsAsynchronously
+    )
     {
-        this.divertHandle = divertHandle;
-        this.threadPoolBoundHandle = threadPoolBoundHandle;
-        preAllocatedOverlapped = new PreAllocatedOverlapped(ioCompletionCallback, this, null);
+        this.pool = pool;
+        ioCompletionOperation = new IOCompletionOperation<DivertValueTaskSource>(
+            divertHandle,
+            threadPoolBoundHandle,
+            this
+        );
+        source = new ManualResetValueTaskSourceCore<int>
+        {
+            RunContinuationsAsynchronously = runContinuationsAsynchronously,
+        };
     }
 
-    // From cancellation registration.
-    private void ExecuteOrRequestCancel()
+    private SafeHandle SafeHandle => ioCompletionOperation.SafeHandle;
+
+    public void Dispose()
     {
-        uint originalStatus = Interlocked.CompareExchange(ref status, Status.Canceled, Status.Idle);
-        if (originalStatus is Status.Pending)
+        pendingOperation.Dispose();
+        ioCompletionOperation.Dispose();
+    }
+
+    public int GetResult(short token)
+    {
+        try
         {
-            using (divertHandle.GetReference(out var handle))
+            return source.GetResult(token);
+        }
+        finally
+        {
+            source.Reset();
+            if (!pool.Writer.TryWrite(this))
             {
-                _ = PInvoke.CancelIoEx(new(handle), pendingOperation.NativeOverlapped);
+                Dispose();
             }
         }
     }
 
-    // After ERROR_IO_PENDING.
-    protected void CancelIfRequested()
-    {
-        uint originalStatus = Interlocked.CompareExchange(ref status, Status.Pending, Status.Idle);
-        if (originalStatus is Status.Canceled)
-        {
-            using (divertHandle.GetReference(out var handle))
-            {
-                _ = PInvoke.CancelIoEx(new(handle), pendingOperation.NativeOverlapped);
-            }
-        }
-    }
+    public ValueTaskSourceStatus GetStatus(short token) => source.GetStatus(token);
 
-    // From completion callback.
-    private void ResetIfPendingOrCanceled()
-    {
-        uint originalStatus = Interlocked.CompareExchange(ref status, Status.Idle, Status.Pending);
-        if (originalStatus is Status.Canceled)
-        {
-            Interlocked.CompareExchange(ref status, Status.Idle, originalStatus);
-        }
-    }
+    public void OnCompleted(
+        Action<object?> continuation,
+        object? state,
+        short token,
+        ValueTaskSourceOnCompletedFlags flags
+    ) => source.OnCompleted(continuation, state, token, flags);
 
-    protected PendingOperation PrepareOperation(
+    private ref readonly PendingOperation PrepareOperation(
         Memory<byte> packetBuffer,
         Memory<DivertAddress> addresses,
         CancellationToken cancellationToken
     )
     {
-        var cancellationTokenRegistration = cancellationToken.CanBeCanceled
-            ? cancellationToken.UnsafeRegister(
-                static state => ((DivertValueTaskSource)state!).ExecuteOrRequestCancel(),
-                this
-            )
-            : default;
-        var nativeOverlapped = threadPoolBoundHandle.AllocateNativeOverlapped(preAllocatedOverlapped);
-        this.nativeOverlapped = new(nativeOverlapped);
+        var cancellationTokenRegistration = ioCompletionOperation.Prepare(cancellationToken, out var nativeOverlapped);
         pendingOperation = new PendingOperation(
             nativeOverlapped,
+            cancellationTokenRegistration,
             packetBuffer,
-            addresses,
-            cancellationTokenRegistration
+            addresses
         );
-        return pendingOperation;
+        return ref pendingOperation;
     }
 
-    private void DisposePendingOperation()
+    public void OnCompleted(uint errorCode, uint numBytes)
     {
-        var overlapped = Interlocked.Exchange(ref nativeOverlapped, default);
-        if (overlapped != default)
+        using var _ = pendingOperation;
+        if (errorCode is (uint)WIN32_ERROR.ERROR_SUCCESS)
         {
-            pendingOperation.Dispose();
-            threadPoolBoundHandle.FreeNativeOverlapped((NativeOverlapped*)overlapped);
+            source.SetResult((int)numBytes);
+        }
+        else if (errorCode is (uint)WIN32_ERROR.ERROR_OPERATION_ABORTED)
+        {
+            var token = pendingOperation.CancellationToken;
+            var exception = token.IsCancellationRequested
+                ? new OperationCanceledException(token)
+                : new OperationCanceledException();
+            source.SetException(exception);
+        }
+        else
+        {
+            var exception = new Win32Exception((int)errorCode);
+            source.SetException(exception);
         }
     }
 
-    public void Dispose()
+    public ValueTask<int> ExecuteAsync<TExecutor>(
+        TExecutor executor,
+        Memory<byte> buffer,
+        Memory<DivertAddress> addresses,
+        CancellationToken cancellationToken
+    )
+        where TExecutor : IDivertValueTaskExecutor
     {
-        if (Interlocked.Exchange(ref status, Status.Disposed) is Status.Disposed)
-        {
-            return;
-        }
-
-        DisposePendingOperation();
-        preAllocatedOverlapped.Dispose();
-        GC.SuppressFinalize(this);
-    }
-
-    ~DivertValueTaskSource()
-    {
-        Dispose();
-    }
-
-    protected abstract void Complete(uint errorCode, uint numBytes, in PendingOperation pendingOperation);
-
-    private static void OnIOCompleted(uint errorCode, uint numBytes, NativeOverlapped* pOVERLAP)
-    {
-        var vts = (DivertValueTaskSource)ThreadPoolBoundHandle.GetNativeOverlappedState(pOVERLAP)!;
+        ref readonly var pendingOperation = ref PrepareOperation(buffer, addresses, cancellationToken);
         try
         {
-            vts.Complete(errorCode, numBytes, vts.pendingOperation);
-            vts.ResetIfPendingOrCanceled();
+            bool success = executor.Execute(SafeHandle, in pendingOperation);
+            if (!success)
+            {
+                int error = Marshal.GetLastPInvokeError();
+                if (error is (int)WIN32_ERROR.ERROR_IO_PENDING)
+                {
+                    ioCompletionOperation.CancelWhenRequested();
+                }
+                else
+                {
+                    Dispose();
+                    return ValueTask.FromException<int>(new Win32Exception(error));
+                }
+            }
+            return new ValueTask<int>(this, source.Version);
         }
-        finally
+        catch
         {
-            vts.DisposePendingOperation();
+            Dispose();
+            throw;
         }
     }
 }

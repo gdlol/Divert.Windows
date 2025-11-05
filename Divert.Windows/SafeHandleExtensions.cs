@@ -13,7 +13,7 @@ internal readonly struct SafeHandleReference<T>(T safeHandle) : IDisposable
 
 internal static class SafeHandleExtensions
 {
-    public static SafeHandleReference<T> GetReference<T>(this T safeHandle, out IntPtr handle)
+    public static SafeHandleReference<T> Reference<T>(this T safeHandle, out IntPtr handle)
         where T : SafeHandle
     {
         bool success = false;

@@ -39,7 +39,7 @@ public sealed class DivertServiceTests : IDisposable
             & DivertFilter.Loopback
             & DivertFilter.Ip
             & !DivertFilter.Impostor
-            & (DivertFilter.RemotePort == port.ToString());
+            & (DivertFilter.RemotePort == port);
         using var service = new DivertService(filter);
 
         var packetBuffer = new byte[ushort.MaxValue + 40];
@@ -54,9 +54,10 @@ public sealed class DivertServiceTests : IDisposable
         await client.SendAsync(new byte[] { 1, 2, 3 }, token);
 
         var divertResult = await divertReceive;
-        Assert.AreEqual(20 + 8 + 3, divertResult.Length);
-        var packet = packetBuffer.AsMemory(0, divertResult.Length);
+        Assert.AreEqual(20 + 8 + 3, divertResult.DataLength);
+        var packet = packetBuffer.AsMemory(0, divertResult.DataLength);
         CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, packet.ToArray()[28..]);
+        Assert.AreEqual(1, divertResult.AddressLength);
         Assert.IsFalse(receive.IsCompleted);
 
         // Re-inject
@@ -75,5 +76,31 @@ public sealed class DivertServiceTests : IDisposable
         result = await receive;
         Assert.HasCount(3, result.Buffer);
         CollectionAssert.AreEqual(new byte[] { 4, 5, 6 }, result.Buffer);
+    }
+
+    [TestMethod]
+    public async Task Close()
+    {
+        using var listener = CreateUdpListener(out int port);
+        var receive = listener.ReceiveAsync(token).AsTask();
+
+        var filter =
+            DivertFilter.UDP
+            & DivertFilter.Loopback
+            & DivertFilter.Ip
+            & !DivertFilter.Impostor
+            & (DivertFilter.RemotePort == port);
+        using var service = new DivertService(filter);
+
+        var packetBuffer = new byte[ushort.MaxValue + 40];
+        var addressBuffer = new DivertAddress[1];
+        var divertReceive = service.ReceiveAsync(packetBuffer, addressBuffer, token).AsTask();
+        Assert.IsFalse(divertReceive.IsCompleted);
+
+        service.Dispose();
+        var exception = await Assert.ThrowsAsync<OperationCanceledException>(async () => await divertReceive);
+        Assert.IsFalse(token.IsCancellationRequested);
+        Assert.AreNotEqual(token, exception.CancellationToken);
+        Assert.AreEqual(CancellationToken.None, exception.CancellationToken);
     }
 }
