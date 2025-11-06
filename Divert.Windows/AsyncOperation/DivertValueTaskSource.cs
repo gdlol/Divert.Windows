@@ -72,13 +72,8 @@ internal unsafe class DivertValueTaskSource : IDisposable, IValueTaskSource<int>
         CancellationToken cancellationToken
     )
     {
-        var cancellationTokenRegistration = ioCompletionOperation.Prepare(cancellationToken, out var nativeOverlapped);
-        pendingOperation = new PendingOperation(
-            nativeOverlapped,
-            cancellationTokenRegistration,
-            packetBuffer,
-            addresses
-        );
+        var nativeOverlapped = ioCompletionOperation.Prepare(cancellationToken);
+        pendingOperation = new PendingOperation(nativeOverlapped, packetBuffer, addresses, cancellationToken);
         return ref pendingOperation;
     }
 
@@ -122,7 +117,7 @@ internal unsafe class DivertValueTaskSource : IDisposable, IValueTaskSource<int>
                 int error = Marshal.GetLastPInvokeError();
                 if (error is (int)WIN32_ERROR.ERROR_IO_PENDING)
                 {
-                    ioCompletionOperation.CancelWhenRequested();
+                    ioCompletionOperation.CancelWhenRequested(pendingOperation.NativeOverlapped);
                 }
                 else
                 {

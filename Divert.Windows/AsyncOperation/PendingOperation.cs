@@ -4,9 +4,9 @@ namespace Divert.Windows.AsyncOperation;
 
 internal unsafe struct PendingOperation(
     NativeOverlapped* nativeOverlapped,
-    CancellationTokenRegistration cancellationTokenRegistration,
     Memory<byte> packetBuffer,
-    Memory<DivertAddress> addresses
+    Memory<DivertAddress> addresses,
+    CancellationToken cancellationToken
 ) : IDisposable
 {
     private MemoryHandle packetBufferHandle = packetBuffer.Pin();
@@ -18,11 +18,10 @@ internal unsafe struct PendingOperation(
 
     public readonly Memory<byte> PacketBuffer => packetBuffer;
     public readonly Memory<DivertAddress> Addresses => addresses;
-    public readonly CancellationToken CancellationToken => cancellationTokenRegistration.Token;
+    public readonly CancellationToken CancellationToken => cancellationToken;
 
     public void Dispose()
     {
-        cancellationTokenRegistration.Dispose();
         packetBufferHandle.Dispose();
         addressesHandle.Dispose();
     }

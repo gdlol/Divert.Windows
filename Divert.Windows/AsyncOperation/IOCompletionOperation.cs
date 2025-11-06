@@ -24,6 +24,7 @@ internal sealed unsafe class IOCompletionOperation<THandler> : IDisposable, IOCo
     private readonly PreAllocatedOverlapped preAllocatedOverlapped;
     private readonly THandler handler;
 
+    private CancellationTokenRegistration cancellationRegistration;
     private NativeOverlapped* nativeOverlapped;
 
     public IOCompletionOperation(SafeHandle safeHandle, ThreadPoolBoundHandle threadPoolBoundHandle, THandler handler)
@@ -47,11 +48,11 @@ internal sealed unsafe class IOCompletionOperation<THandler> : IDisposable, IOCo
         cancellationHandle.Dispose();
     }
 
-    public CancellationTokenRegistration Prepare(CancellationToken cancellationToken, out NativeOverlapped* overlapped)
+    public NativeOverlapped* Prepare(CancellationToken cancellationToken)
     {
         Debug.Assert(nativeOverlapped is null);
         nativeOverlapped = threadPoolBoundHandle.AllocateNativeOverlapped(preAllocatedOverlapped);
-        var registration = cancellationToken.CanBeCanceled
+        cancellationRegistration = cancellationToken.CanBeCanceled
             ? cancellationToken.UnsafeRegister(
                 static state =>
                 {
@@ -61,17 +62,17 @@ internal sealed unsafe class IOCompletionOperation<THandler> : IDisposable, IOCo
                 this
             )
             : default;
-        overlapped = nativeOverlapped;
-        return registration;
+        return nativeOverlapped;
     }
 
-    public void CancelWhenRequested()
+    public void CancelWhenRequested(NativeOverlapped* nativeOverlapped)
     {
         cancellationHandle.CancelWhenRequested(nativeOverlapped);
     }
 
     public void OnCompleted(uint errorCode, uint numBytes)
     {
+        cancellationRegistration.Dispose();
         try
         {
             handler.OnCompleted(errorCode, numBytes);
