@@ -4,8 +4,8 @@ namespace Divert.Windows;
 
 internal sealed class DivertHandle : SafeHandleZeroOrMinusOneIsInvalid
 {
-    public DivertHandle(IntPtr handle)
-        : base(ownsHandle: true)
+    public DivertHandle(IntPtr handle, bool ownsHandle = true)
+        : base(ownsHandle)
     {
         this.handle = handle;
     }

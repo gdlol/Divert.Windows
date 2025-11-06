@@ -9,7 +9,7 @@ internal sealed class DivertReceiveExecutor : IDivertValueTaskExecutor
 
     public unsafe bool Execute(SafeHandle safeHandle, ref readonly PendingOperation pendingOperation)
     {
-        using var _ = safeHandle.Reference(out var handle);
+        using var _ = safeHandle.DangerousGetHandle(out var handle);
         addressesLengthBuffer.Span[0] = (uint)(pendingOperation.Addresses.Length * sizeof(DivertAddress));
         return NativeMethods.WinDivertRecvEx(
             handle,

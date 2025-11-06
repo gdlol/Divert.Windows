@@ -15,11 +15,5 @@ internal sealed class CString(string str) : IDisposable
             Marshal.FreeHGlobal(Ptr);
             disposed = true;
         }
-        GC.SuppressFinalize(this);
-    }
-
-    ~CString()
-    {
-        Dispose();
     }
 }

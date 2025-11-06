@@ -6,7 +6,7 @@ using Windows.Win32.Foundation;
 
 namespace Divert.Windows.AsyncOperation;
 
-internal unsafe class DivertValueTaskSource : IDisposable, IValueTaskSource<int>, IOCompletionHandler
+internal sealed unsafe class DivertValueTaskSource : IDisposable, IValueTaskSource<int>, IOCompletionHandler
 {
     private readonly Channel<DivertValueTaskSource> pool;
     private readonly IOCompletionOperation<DivertValueTaskSource> ioCompletionOperation;
@@ -107,9 +107,9 @@ internal unsafe class DivertValueTaskSource : IDisposable, IValueTaskSource<int>
     )
         where TExecutor : IDivertValueTaskExecutor
     {
-        ref readonly var pendingOperation = ref PrepareOperation(buffer, addresses, cancellationToken);
         try
         {
+            ref readonly var pendingOperation = ref PrepareOperation(buffer, addresses, cancellationToken);
             executor.DelayExecutionInTests();
             bool success = executor.Execute(SafeHandle, in pendingOperation);
             if (!success)

@@ -11,10 +11,12 @@ internal interface IDivertValueTaskExecutor
 
 internal static class DivertValueTaskExecutorDelay
 {
-    [Conditional("DIVERT_WINDOWS_TESTS")]
+    private const string DIVERT_WINDOWS_TESTS = "DIVERT_WINDOWS_TESTS";
+
+    [Conditional(DIVERT_WINDOWS_TESTS)]
     public static void DelayExecutionInTests(this IDivertValueTaskExecutor executor)
     {
-        if (Environment.GetEnvironmentVariable(nameof(DivertValueTaskExecutorDelay)) is not string name)
+        if (Environment.GetEnvironmentVariable(DIVERT_WINDOWS_TESTS) is not string name)
         {
             return;
         }

@@ -1,5 +1,9 @@
+using System.ComponentModel;
 using System.Net;
 using System.Net.Sockets;
+using Windows.Win32;
+using Windows.Win32.Foundation;
+using Windows.Win32.Storage.FileSystem;
 
 namespace Divert.Windows.Tests;
 
@@ -178,5 +182,86 @@ public sealed class DivertServiceTests : IDisposable
         cts.Cancel();
         var divertSend = service.SendAsync(packetBuffer, addressBuffer, token).AsTask();
         Assert.IsTrue(divertSend.IsCanceled);
+    }
+
+    [TestMethod]
+    public async Task InsufficientBuffer()
+    {
+        using var listener = CreateUdpListener(out int port);
+        var receive = listener.ReceiveAsync(token).AsTask();
+
+        var filter =
+            DivertFilter.UDP
+            & DivertFilter.Loopback
+            & DivertFilter.Ip
+            & !DivertFilter.Impostor
+            & (DivertFilter.RemotePort == port);
+        using var service = new DivertService(filter);
+
+        var packetBuffer = new byte[10]; // insufficient buffer
+        var addressBuffer = new DivertAddress[1];
+
+        var divertReceive = service.ReceiveAsync(packetBuffer, addressBuffer, token).AsTask();
+        Assert.IsFalse(divertReceive.IsCompleted);
+
+        // send 3 bytes payload
+        using var client = new UdpClient();
+        client.Connect(IPAddress.Loopback, port);
+        await client.SendAsync(new byte[] { 1, 2, 3 }, token);
+
+        var exception = await Assert.ThrowsAsync<Win32Exception>(async () => await divertReceive);
+        Assert.AreEqual((int)WIN32_ERROR.ERROR_INSUFFICIENT_BUFFER, exception.NativeErrorCode);
+    }
+
+    [TestMethod]
+    public async Task DisposeOnReceive()
+    {
+        using var listener = CreateUdpListener(out int port);
+
+        var filter =
+            DivertFilter.UDP
+            & DivertFilter.Loopback
+            & DivertFilter.Ip
+            & !DivertFilter.Impostor
+            & (DivertFilter.RemotePort == port);
+        using var service = new DivertService(filter);
+
+        var packetBuffer = new byte[ushort.MaxValue + 40];
+        var addressBuffer = new DivertAddress[1];
+
+        using var pipe = new ExecutorDelayPipe();
+        var divertReceive = Task.Run(async () => await service.ReceiveAsync(packetBuffer, addressBuffer, token));
+        Assert.IsFalse(divertReceive.IsCompleted);
+
+        await pipe.Stream.WaitForConnectionAsync(token);
+        Assert.IsFalse(divertReceive.IsCompleted);
+        service.Dispose();
+        pipe.Stream.WriteByte(0);
+        await pipe.Stream.FlushAsync(token);
+        pipe.Stream.Disconnect();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(async () => await divertReceive);
+    }
+
+    [TestMethod]
+    public async Task InvalidHandle()
+    {
+        var handle = PInvoke.CreateFile(
+            Path.GetTempFileName(),
+            (uint)GENERIC_ACCESS_RIGHTS.GENERIC_READ,
+            FILE_SHARE_MODE.FILE_SHARE_NONE,
+            null,
+            FILE_CREATION_DISPOSITION.OPEN_EXISTING,
+            FILE_FLAGS_AND_ATTRIBUTES.FILE_ATTRIBUTE_NORMAL | FILE_FLAGS_AND_ATTRIBUTES.FILE_FLAG_OVERLAPPED,
+            null
+        );
+        using var service = new DivertService(handle);
+
+        var packetBuffer = new byte[ushort.MaxValue + 40];
+        var addressBuffer = new DivertAddress[1];
+        var exception = await Assert.ThrowsAsync<Win32Exception>(async () =>
+            await service.ReceiveAsync(packetBuffer, addressBuffer, token)
+        );
+        Assert.AreEqual((int)WIN32_ERROR.ERROR_INVALID_PARAMETER, exception.NativeErrorCode);
     }
 }

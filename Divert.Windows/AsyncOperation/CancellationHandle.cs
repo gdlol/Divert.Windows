@@ -23,7 +23,7 @@ internal sealed unsafe class CancellationHandle(SafeHandle safeHandle) : IDispos
         int originalStatus = Interlocked.CompareExchange(ref status, Status.Canceled, Status.Idle);
         if (originalStatus is Status.Pending)
         {
-            using (safeHandle.Reference(out var handle))
+            using (safeHandle.DangerousGetHandle(out var handle))
             {
                 _ = PInvoke.CancelIoEx(new(handle), nativeOverlapped);
             }
@@ -36,7 +36,7 @@ internal sealed unsafe class CancellationHandle(SafeHandle safeHandle) : IDispos
         int originalStatus = Interlocked.CompareExchange(ref status, Status.Pending, Status.Idle);
         if (originalStatus is Status.Canceled)
         {
-            using (safeHandle.Reference(out var handle))
+            using (safeHandle.DangerousGetHandle(out var handle))
             {
                 _ = PInvoke.CancelIoEx(new(handle), nativeOverlapped);
             }

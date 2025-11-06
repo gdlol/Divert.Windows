@@ -6,7 +6,7 @@ internal sealed unsafe class DivertSendExecutor : IDivertValueTaskExecutor
 {
     public bool Execute(SafeHandle safeHandle, ref readonly PendingOperation pendingOperation)
     {
-        using var _ = safeHandle.Reference(out var handle);
+        using var _ = safeHandle.DangerousGetHandle(out var handle);
         return NativeMethods.WinDivertSendEx(
             handle,
             pendingOperation.PacketBufferHandle.Pointer,

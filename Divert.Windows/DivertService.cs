@@ -68,6 +68,20 @@ public sealed unsafe class DivertService : IDisposable
         sendExecutor = new DivertSendExecutor();
     }
 
+    public DivertService(SafeHandle handle, bool runContinuationsAsynchronously = true)
+    {
+        ArgumentNullException.ThrowIfNull(handle);
+
+        using var _ = handle.DangerousGetHandle(out var nativeHandle);
+        divertHandle = new DivertHandle(nativeHandle, ownsHandle: false);
+        this.runContinuationsAsynchronously = runContinuationsAsynchronously;
+        threadPoolBoundHandle = ThreadPoolBoundHandle.BindHandle(divertHandle);
+        sendVtsPool = Channel.CreateUnbounded<DivertValueTaskSource>();
+        receiveVtsPool = Channel.CreateUnbounded<DivertValueTaskSource>();
+        receiveExecutor = new DivertReceiveExecutor();
+        sendExecutor = new DivertSendExecutor();
+    }
+
     private bool disposed = false;
 
     private static void DisposeVtsPool(Channel<DivertValueTaskSource> pool)

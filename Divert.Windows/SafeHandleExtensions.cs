@@ -2,18 +2,24 @@ using System.Runtime.InteropServices;
 
 namespace Divert.Windows;
 
-internal readonly struct SafeHandleReference<T>(T safeHandle) : IDisposable
+internal ref struct SafeHandleReference<T>(T safeHandle) : IDisposable
     where T : SafeHandle
 {
+    private bool disposed;
+
     public void Dispose()
     {
-        safeHandle.DangerousRelease();
+        if (!disposed)
+        {
+            safeHandle.DangerousRelease();
+            disposed = true;
+        }
     }
 }
 
 internal static class SafeHandleExtensions
 {
-    public static SafeHandleReference<T> Reference<T>(this T safeHandle, out IntPtr handle)
+    public static SafeHandleReference<T> DangerousGetHandle<T>(this T safeHandle, out IntPtr handle)
         where T : SafeHandle
     {
         bool success = false;
