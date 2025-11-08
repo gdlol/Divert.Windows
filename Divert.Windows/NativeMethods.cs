@@ -82,6 +82,10 @@ internal static unsafe partial class NativeMethods
 
     [LibraryImport(dllName, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool WinDivertHelperDecrementTTL(void* pPacket, uint packetLen);
+
+    [LibraryImport(dllName, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool WinDivertHelperCompileFilter(
         IntPtr filter,
         WINDIVERT_LAYER layer,
@@ -98,5 +102,14 @@ internal static unsafe partial class NativeMethods
         WINDIVERT_LAYER layer,
         byte* buffer,
         uint bufLen
+    );
+
+    [LibraryImport(dllName, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool WinDivertHelperEvalFilter(
+        IntPtr filter,
+        void* pPacket,
+        uint packetLen,
+        WINDIVERT_ADDRESS* pAddr
     );
 }

@@ -175,3 +175,16 @@ internal enum WINDIVERT_SHUTDOWN
     WINDIVERT_SHUTDOWN_SEND = 0x2,
     WINDIVERT_SHUTDOWN_BOTH = 0x3,
 }
+
+[StructLayout(LayoutKind.Explicit, Size = 16)]
+internal struct WINDIVERT_IOCTL
+{
+    [FieldOffset(0)]
+    public WINDIVERT_PARAM GetParam;
+
+    [FieldOffset(0)]
+    public ulong Value;
+
+    [FieldOffset(8)]
+    public WINDIVERT_PARAM SetParam;
+}

@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading.Channels;
 using Divert.Windows.AsyncOperation;
@@ -7,10 +8,22 @@ using Windows.Win32.Foundation;
 namespace Divert.Windows;
 
 /// <summary>
-/// Main entry point WinDivert APIs.
+/// Main entry point for WinDivert operations.
 /// </summary>
 public sealed unsafe class DivertService : IDisposable
 {
+    public const int HighestPriority = Constants.WINDIVERT_PRIORITY_HIGHEST;
+    public const int LowestPriority = Constants.WINDIVERT_PRIORITY_LOWEST;
+    public const int DefaultQueueLength = Constants.WINDIVERT_PARAM_QUEUE_LENGTH_DEFAULT;
+    public const int MinQueueLength = Constants.WINDIVERT_PARAM_QUEUE_LENGTH_MIN;
+    public const int MaxQueueLength = Constants.WINDIVERT_PARAM_QUEUE_LENGTH_MAX;
+    public static TimeSpan DefaultQueueTime => TimeSpan.FromMilliseconds(Constants.WINDIVERT_PARAM_QUEUE_TIME_DEFAULT);
+    public static TimeSpan MinQueueTime => TimeSpan.FromMilliseconds(Constants.WINDIVERT_PARAM_QUEUE_TIME_MIN);
+    public static TimeSpan MaxQueueTime => TimeSpan.FromMilliseconds(Constants.WINDIVERT_PARAM_QUEUE_TIME_MAX);
+    public const int DefaultQueueSize = Constants.WINDIVERT_PARAM_QUEUE_SIZE_DEFAULT;
+    public const int MinQueueSize = Constants.WINDIVERT_PARAM_QUEUE_SIZE_MIN;
+    public const int MaxQueueSize = Constants.WINDIVERT_PARAM_QUEUE_SIZE_MAX;
+
     private readonly DivertHandle divertHandle;
     private readonly bool runContinuationsAsynchronously;
 
@@ -20,50 +33,9 @@ public sealed unsafe class DivertService : IDisposable
     private readonly DivertReceiveExecutor receiveExecutor;
     private readonly DivertSendExecutor sendExecutor;
 
-    /// <summary>
-    /// Opens a WinDivert handle for the given filter.
-    /// </summary>
-    /// <param name="filter">A packet filter string specified in the WinDivert filter language.</param>
-    /// <param name="layer">The layer.</param>
-    /// <param name="priority">The priority of the handle.</param>
-    /// <param name="flags">Additional flags.</param>
-    public DivertService(
-        DivertFilter filter,
-        DivertLayer layer = DivertLayer.Network,
-        short priority = 0,
-        DivertFlags flags = DivertFlags.None,
-        bool runContinuationsAsynchronously = true
-    )
+    private DivertService(DivertHandle divertHandle)
     {
-        ArgumentNullException.ThrowIfNull(filter);
-
-        using var s = new CString(filter.Clause);
-        IntPtr errorStr;
-        uint errorPos;
-        bool success = NativeMethods.WinDivertHelperCompileFilter(
-            s.Ptr,
-            (WINDIVERT_LAYER)layer,
-            null,
-            0,
-            &errorStr,
-            &errorPos
-        );
-        if (!success)
-        {
-            string? errorString = Marshal.PtrToStringAnsi(errorStr);
-            throw new ArgumentException(
-                $"{errorString} ({errorPos}): ...{filter.Clause[(int)errorPos..]}",
-                nameof(filter)
-            );
-        }
-
-        var handle = NativeMethods.WinDivertOpen(s.Ptr, (WINDIVERT_LAYER)layer, priority, (ulong)flags);
-        if (new HANDLE(handle) == HANDLE.INVALID_HANDLE_VALUE)
-        {
-            throw new Win32Exception(Marshal.GetLastPInvokeError());
-        }
-        divertHandle = new DivertHandle(handle);
-        this.runContinuationsAsynchronously = runContinuationsAsynchronously;
+        this.divertHandle = divertHandle;
         threadPoolBoundHandle = ThreadPoolBoundHandle.BindHandle(divertHandle);
         sendVtsPool = Channel.CreateUnbounded<DivertValueTaskSource>();
         receiveVtsPool = Channel.CreateUnbounded<DivertValueTaskSource>();
@@ -71,18 +43,64 @@ public sealed unsafe class DivertService : IDisposable
         sendExecutor = new DivertSendExecutor();
     }
 
-    public DivertService(SafeHandle handle, bool runContinuationsAsynchronously = true)
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DivertService"/> class.
+    /// </summary>
+    public DivertService(
+        DivertFilter filter,
+        DivertLayer layer = DivertLayer.Network,
+        short priority = 0,
+        DivertFlags flags = DivertFlags.None,
+        bool runContinuationsAsynchronously = true
+    )
+        : this(OpenHandle(DivertHelper.CompileFilter(filter, layer), layer, priority, flags))
     {
-        ArgumentNullException.ThrowIfNull(handle);
-
-        using var _ = handle.DangerousGetHandle(out var nativeHandle);
-        divertHandle = new DivertHandle(nativeHandle, ownsHandle: false);
         this.runContinuationsAsynchronously = runContinuationsAsynchronously;
-        threadPoolBoundHandle = ThreadPoolBoundHandle.BindHandle(divertHandle);
-        sendVtsPool = Channel.CreateUnbounded<DivertValueTaskSource>();
-        receiveVtsPool = Channel.CreateUnbounded<DivertValueTaskSource>();
-        receiveExecutor = new DivertReceiveExecutor();
-        sendExecutor = new DivertSendExecutor();
+    }
+
+    private static DivertHandle OpenHandle(
+        ReadOnlySpan<byte> filter,
+        DivertLayer layer,
+        short priority,
+        DivertFlags flags
+    )
+    {
+        if (priority < LowestPriority || priority > HighestPriority)
+        {
+            throw new ArgumentOutOfRangeException(nameof(priority));
+        }
+
+        var pBuffer = Unsafe.AsPointer(ref MemoryMarshal.GetReference(filter));
+        var handle = NativeMethods.WinDivertOpen(new(pBuffer), (WINDIVERT_LAYER)layer, priority, (ulong)flags);
+        if (new HANDLE(handle) == HANDLE.INVALID_HANDLE_VALUE)
+        {
+            throw new Win32Exception(Marshal.GetLastPInvokeError());
+        }
+        return new DivertHandle(handle);
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DivertService"/> class.
+    /// </summary>
+    public DivertService(
+        ReadOnlySpan<byte> filter,
+        DivertLayer layer = DivertLayer.Network,
+        short priority = 0,
+        DivertFlags flags = DivertFlags.None,
+        bool runContinuationsAsynchronously = true
+    )
+        : this(OpenHandle(filter, layer, priority, flags))
+    {
+        this.runContinuationsAsynchronously = runContinuationsAsynchronously;
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DivertService"/> class.
+    /// </summary>
+    public DivertService(SafeHandle handle, bool runContinuationsAsynchronously = true)
+        : this(new DivertHandle(handle.DangerousGetHandle(), ownsHandle: false))
+    {
+        this.runContinuationsAsynchronously = runContinuationsAsynchronously;
     }
 
     private bool disposed = false;
@@ -112,6 +130,8 @@ public sealed unsafe class DivertService : IDisposable
         threadPoolBoundHandle.Dispose();
         divertHandle.Dispose();
     }
+
+    public DivertHandle SafeHandle => divertHandle;
 
     private DivertValueTaskSource GetVts(Channel<DivertValueTaskSource> vtsPool)
     {
@@ -171,5 +191,66 @@ public sealed unsafe class DivertService : IDisposable
 
         var vts = GetVts(sendVtsPool);
         return sendExecutor.SendAsync(vts, buffer, addresses, cancellationToken);
+    }
+
+    public Version Version
+    {
+        get
+        {
+            int major = (int)
+                DivertIOControl.GetParam(threadPoolBoundHandle, WINDIVERT_PARAM.WINDIVERT_PARAM_VERSION_MAJOR);
+            int minor = (int)
+                DivertIOControl.GetParam(threadPoolBoundHandle, WINDIVERT_PARAM.WINDIVERT_PARAM_VERSION_MINOR);
+            return new Version(major, minor);
+        }
+    }
+
+    public int QueueLength
+    {
+        get => (int)DivertIOControl.GetParam(threadPoolBoundHandle, WINDIVERT_PARAM.WINDIVERT_PARAM_QUEUE_LENGTH);
+        set
+        {
+            if (value < MinQueueLength || value > MaxQueueLength)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value));
+            }
+
+            DivertIOControl.SetParam(threadPoolBoundHandle, WINDIVERT_PARAM.WINDIVERT_PARAM_QUEUE_LENGTH, (ulong)value);
+        }
+    }
+
+    public TimeSpan QueueTime
+    {
+        get =>
+            TimeSpan.FromMilliseconds(
+                DivertIOControl.GetParam(threadPoolBoundHandle, WINDIVERT_PARAM.WINDIVERT_PARAM_QUEUE_TIME)
+            );
+        set
+        {
+            if (value < MinQueueTime || value > MaxQueueTime)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value));
+            }
+
+            DivertIOControl.SetParam(
+                threadPoolBoundHandle,
+                WINDIVERT_PARAM.WINDIVERT_PARAM_QUEUE_TIME,
+                (ulong)value.TotalMilliseconds
+            );
+        }
+    }
+
+    public int QueueSize
+    {
+        get => (int)DivertIOControl.GetParam(threadPoolBoundHandle, WINDIVERT_PARAM.WINDIVERT_PARAM_QUEUE_SIZE);
+        set
+        {
+            if (value < MinQueueSize || value > MaxQueueSize)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value));
+            }
+
+            DivertIOControl.SetParam(threadPoolBoundHandle, WINDIVERT_PARAM.WINDIVERT_PARAM_QUEUE_SIZE, (ulong)value);
+        }
     }
 }

@@ -4,7 +4,7 @@ namespace Divert.Windows;
 
 internal sealed class CString(string str) : IDisposable
 {
-    internal IntPtr Ptr { get; } = Marshal.StringToHGlobalAnsi(str);
+    internal IntPtr Pointer { get; } = Marshal.StringToHGlobalAnsi(str);
 
     private bool disposed;
 
@@ -12,7 +12,7 @@ internal sealed class CString(string str) : IDisposable
     {
         if (!disposed)
         {
-            Marshal.FreeHGlobal(Ptr);
+            Marshal.FreeHGlobal(Pointer);
             disposed = true;
         }
     }

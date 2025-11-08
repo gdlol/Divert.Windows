@@ -2,7 +2,7 @@ using Microsoft.Win32.SafeHandles;
 
 namespace Divert.Windows;
 
-internal sealed class DivertHandle : SafeHandleZeroOrMinusOneIsInvalid
+public sealed class DivertHandle : SafeHandleZeroOrMinusOneIsInvalid
 {
     public DivertHandle(IntPtr handle, bool ownsHandle = true)
         : base(ownsHandle)

@@ -11,7 +11,50 @@ namespace Divert.Windows.Tests;
 [TestClass]
 public sealed class DivertServiceTests : DivertTests
 {
-    private static IEnumerable<object[]> InvalidFilterCases()
+    [TestMethod]
+    public void Parameters()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new DivertService(false, priority: DivertService.HighestPriority + 1)
+        );
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new DivertService(false, priority: DivertService.LowestPriority - 1)
+        );
+
+        using var service = new DivertService(false, priority: DivertService.HighestPriority);
+        using var _ = new DivertService(false, priority: DivertService.LowestPriority);
+        Assert.AreEqual(new Version(2, 2), service.Version);
+
+        Assert.AreEqual(DivertService.DefaultQueueLength, service.QueueLength);
+        service.QueueLength = DivertService.MinQueueLength;
+        Assert.AreEqual(DivertService.MinQueueLength, service.QueueLength);
+        service.QueueLength = DivertService.MaxQueueLength;
+        Assert.AreEqual(DivertService.MaxQueueLength, service.QueueLength);
+        Assert.Throws<ArgumentOutOfRangeException>(() => service.QueueLength = DivertService.MinQueueLength - 1);
+        Assert.Throws<ArgumentOutOfRangeException>(() => service.QueueLength = DivertService.MaxQueueLength + 1);
+
+        Assert.AreEqual(DivertService.DefaultQueueTime, service.QueueTime);
+        service.QueueTime = DivertService.MinQueueTime;
+        Assert.AreEqual(DivertService.MinQueueTime, service.QueueTime);
+        service.QueueTime = DivertService.MaxQueueTime;
+        Assert.AreEqual(DivertService.MaxQueueTime, service.QueueTime);
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            service.QueueTime = DivertService.MinQueueTime - TimeSpan.FromMilliseconds(1)
+        );
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            service.QueueTime = DivertService.MaxQueueTime + TimeSpan.FromMilliseconds(1)
+        );
+
+        Assert.AreEqual(DivertService.DefaultQueueSize, service.QueueSize);
+        service.QueueSize = DivertService.MinQueueSize;
+        Assert.AreEqual(DivertService.MinQueueSize, service.QueueSize);
+        service.QueueSize = DivertService.MaxQueueSize;
+        Assert.AreEqual(DivertService.MaxQueueSize, service.QueueSize);
+        Assert.Throws<ArgumentOutOfRangeException>(() => service.QueueSize = DivertService.MinQueueSize - 1);
+        Assert.Throws<ArgumentOutOfRangeException>(() => service.QueueSize = DivertService.MaxQueueSize + 1);
+    }
+
+    public static IEnumerable<object[]> InvalidFilterCases()
     {
         return
         [
@@ -288,6 +331,7 @@ public sealed class DivertServiceTests : DivertTests
             null
         );
         using var service = new DivertService(handle);
+        Assert.AreEqual(handle.DangerousGetHandle(), service.SafeHandle.DangerousGetHandle());
 
         var packetBuffer = new byte[ushort.MaxValue + 40];
         var addressBuffer = new DivertAddress[1];
@@ -295,5 +339,8 @@ public sealed class DivertServiceTests : DivertTests
             await service.ReceiveAsync(packetBuffer, addressBuffer, Token)
         );
         Assert.AreEqual((int)WIN32_ERROR.ERROR_INVALID_PARAMETER, exception.NativeErrorCode);
+
+        exception = Assert.Throws<Win32Exception>(() => service.QueueLength = DivertService.DefaultQueueLength);
+        Assert.AreEqual((int)WIN32_ERROR.ERROR_ACCESS_DENIED, exception.NativeErrorCode);
     }
 }

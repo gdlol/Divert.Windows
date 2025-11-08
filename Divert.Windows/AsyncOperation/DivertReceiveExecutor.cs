@@ -5,12 +5,12 @@ namespace Divert.Windows.AsyncOperation;
 
 internal sealed class DivertReceiveExecutor : IDivertValueTaskExecutor
 {
-    private readonly Memory<uint> addressesLengthBuffer = GC.AllocateArray<uint>(1, pinned: true);
+    private readonly uint[] addressesLengthBuffer = GC.AllocateArray<uint>(1, pinned: true);
 
     public unsafe bool Execute(SafeHandle safeHandle, ref readonly PendingOperation pendingOperation)
     {
         using var _ = safeHandle.DangerousGetHandle(out var handle);
-        addressesLengthBuffer.Span[0] = (uint)(pendingOperation.Addresses.Length * sizeof(DivertAddress));
+        addressesLengthBuffer[0] = (uint)(pendingOperation.Addresses.Length * sizeof(DivertAddress));
         return NativeMethods.WinDivertRecvEx(
             handle,
             pendingOperation.PacketBufferHandle.Pointer,
@@ -18,7 +18,7 @@ internal sealed class DivertReceiveExecutor : IDivertValueTaskExecutor
             null,
             0,
             (WINDIVERT_ADDRESS*)pendingOperation.AddressesHandle.Pointer,
-            (uint*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(addressesLengthBuffer.Span)),
+            (uint*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(addressesLengthBuffer.AsSpan())),
             pendingOperation.NativeOverlapped
         );
     }
@@ -31,7 +31,7 @@ internal sealed class DivertReceiveExecutor : IDivertValueTaskExecutor
     )
     {
         int dataLength = await source.ExecuteAsync(this, buffer, addresses, cancellationToken).ConfigureAwait(false);
-        int addressesLength = (int)addressesLengthBuffer.Span[0] / Marshal.SizeOf<DivertAddress>();
+        int addressesLength = (int)addressesLengthBuffer[0] / Marshal.SizeOf<DivertAddress>();
         return new DivertReceiveResult(dataLength, addressesLength);
     }
 }
