@@ -1,3 +1,4 @@
+using System.Net.Sockets;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -16,12 +17,8 @@ public partial class DivertFilter
         Clause = clause;
     }
 
-    public static implicit operator DivertFilter(string clause)
-    {
-        return new DivertFilter(clause);
-    }
-
-    private static string ReplaceParentheses(string expression)
+    // e.g. "(a and (b or c)) or d" -> "() or d"
+    private static string CollapseParentheses(string expression)
     {
         var builder = new StringBuilder();
         int index = 0;
@@ -68,12 +65,12 @@ public partial class DivertFilter
     [GeneratedRegex(@"\s(or|\|\|)\s")]
     private static partial Regex OrPatternRegex();
 
-    private static bool MatchOrPattern(string s) => OrPatternRegex().IsMatch(ReplaceParentheses(s));
+    private static bool MatchOrPattern(string s) => OrPatternRegex().IsMatch(CollapseParentheses(s));
 
     [GeneratedRegex(@"\s(and|&&)\s")]
     private static partial Regex AndPatternRegex();
 
-    private static bool MatchAndPattern(string s) => AndPatternRegex().IsMatch(ReplaceParentheses(s));
+    private static bool MatchAndPattern(string s) => AndPatternRegex().IsMatch(CollapseParentheses(s));
 
     public static DivertFilter operator &(DivertFilter left, DivertFilter right)
     {
@@ -179,6 +176,44 @@ public partial class DivertFilter
             return new DivertFilter(clause);
         }
 
+        private static string Macro(bool value) => value ? "TRUE" : "FALSE";
+
+        private static string Macro(ProtocolType protocolType) =>
+            protocolType switch
+            {
+                ProtocolType.Tcp => "TCP",
+                ProtocolType.Udp => "UDP",
+                ProtocolType.Icmp => "ICMP",
+                ProtocolType.IcmpV6 => "ICMPV6",
+                _ => ((int)protocolType).ToString(),
+            };
+
+        private static string Macro(DivertEvent e) =>
+            e switch
+            {
+                DivertEvent.NetworkPacket => "PACKET",
+                DivertEvent.FlowEstablished => "ESTABLISHED",
+                DivertEvent.FlowDeleted => "DELETED",
+                DivertEvent.SocketBind => "BIND",
+                DivertEvent.SocketConnect => "CONNECT",
+                DivertEvent.SocketListen => "LISTEN",
+                DivertEvent.SocketAccept => "ACCEPT",
+                DivertEvent.ReflectOpen => "OPEN",
+                DivertEvent.SocketClose or DivertEvent.ReflectClose => "CLOSE",
+                _ => e.ToString(),
+            };
+
+        private static string Macro(DivertLayer layer) =>
+            layer switch
+            {
+                DivertLayer.Network => "NETWORK",
+                DivertLayer.Forward => "NETWORK_FORWARD",
+                DivertLayer.Flow => "FLOW",
+                DivertLayer.Socket => "SOCKET",
+                DivertLayer.Reflect => "REFLECT",
+                _ => layer.ToString(),
+            };
+
         public static DivertFilter operator ==(Field left, object right)
         {
             string clause = $"{left} = {right}";
@@ -190,6 +225,22 @@ public partial class DivertFilter
             string clause = $"{left} != {right}";
             return new DivertFilter(clause);
         }
+
+        public static DivertFilter operator ==(Field left, bool right) => left == Macro(right);
+
+        public static DivertFilter operator !=(Field left, bool right) => left != Macro(right);
+
+        public static DivertFilter operator ==(Field left, ProtocolType right) => left == Macro(right);
+
+        public static DivertFilter operator !=(Field left, ProtocolType right) => left != Macro(right);
+
+        public static DivertFilter operator ==(Field left, DivertEvent right) => left == Macro(right);
+
+        public static DivertFilter operator !=(Field left, DivertEvent right) => left != Macro(right);
+
+        public static DivertFilter operator ==(Field left, DivertLayer right) => left == Macro(right);
+
+        public static DivertFilter operator !=(Field left, DivertLayer right) => left != Macro(right);
 
         public static DivertFilter operator <(Field left, object right)
         {
@@ -286,4 +337,14 @@ public partial class DivertFilter
     public static Field RemoteAddress { get; } = "remoteAddr";
 
     public static Field RemotePort { get; } = "remotePort";
+
+    public static implicit operator DivertFilter(string clause)
+    {
+        return new DivertFilter(clause);
+    }
+
+    public static implicit operator DivertFilter(bool value)
+    {
+        return value ? True : False;
+    }
 }

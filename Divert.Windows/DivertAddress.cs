@@ -48,11 +48,6 @@ public unsafe struct DivertAddress
 
     private WINDIVERT_ADDRESS address;
 
-    internal DivertAddress(WINDIVERT_ADDRESS address)
-    {
-        this.address = address;
-    }
-
     public DivertAddress(int interfaceIndex, int subInterfaceIndex)
     {
         address = new WINDIVERT_ADDRESS
@@ -73,23 +68,11 @@ public unsafe struct DivertAddress
         }
     }
 
-    public long Timestamp
-    {
-        readonly get { return address.Timestamp; }
-        set { address.Timestamp = value; }
-    }
+    public readonly long Timestamp => address.Timestamp;
 
-    public DivertLayer Layer
-    {
-        readonly get { return (DivertLayer)address.Layer; }
-        set { address.Layer = (byte)value; }
-    }
+    public readonly DivertLayer Layer => (DivertLayer)address.Layer;
 
-    public DivertEvent Event
-    {
-        readonly get { return (DivertEvent)address.Event; }
-        set { address.Layer = (byte)value; }
-    }
+    public readonly DivertEvent Event => (DivertEvent)address.Event;
 
     private readonly bool GetBit(WINDIVERT_ADDRESS_BITS bit)
     {
@@ -108,11 +91,7 @@ public unsafe struct DivertAddress
         }
     }
 
-    public bool IsSniffed
-    {
-        readonly get { return GetBit(WINDIVERT_ADDRESS_BITS.Sniffed); }
-        set { SetBit(WINDIVERT_ADDRESS_BITS.Sniffed, value); }
-    }
+    public readonly bool IsSniffed => GetBit(WINDIVERT_ADDRESS_BITS.Sniffed);
 
     public bool IsOutbound
     {
@@ -120,11 +99,7 @@ public unsafe struct DivertAddress
         set { SetBit(WINDIVERT_ADDRESS_BITS.Outbound, value); }
     }
 
-    public bool IsLoopback
-    {
-        readonly get { return GetBit(WINDIVERT_ADDRESS_BITS.Loopback); }
-        set { SetBit(WINDIVERT_ADDRESS_BITS.Loopback, value); }
-    }
+    public readonly bool IsLoopback => GetBit(WINDIVERT_ADDRESS_BITS.Loopback);
 
     public bool IsImpostor
     {
@@ -132,11 +107,7 @@ public unsafe struct DivertAddress
         set { SetBit(WINDIVERT_ADDRESS_BITS.Impostor, value); }
     }
 
-    public bool IsIPv6
-    {
-        readonly get { return GetBit(WINDIVERT_ADDRESS_BITS.IPv6); }
-        set { SetBit(WINDIVERT_ADDRESS_BITS.IPv6, value); }
-    }
+    public readonly bool IsIPv6 => GetBit(WINDIVERT_ADDRESS_BITS.IPv6);
 
     public bool IsIPChecksumValid
     {

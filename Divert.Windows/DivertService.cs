@@ -51,7 +51,10 @@ public sealed unsafe class DivertService : IDisposable
         if (!success)
         {
             string? errorString = Marshal.PtrToStringAnsi(errorStr);
-            throw new ArgumentException($"{errorPos}: {errorString}", nameof(filter));
+            throw new ArgumentException(
+                $"{errorString} ({errorPos}): ...{filter.Clause[(int)errorPos..]}",
+                nameof(filter)
+            );
         }
 
         var handle = NativeMethods.WinDivertOpen(s.Ptr, (WINDIVERT_LAYER)layer, priority, (ulong)flags);

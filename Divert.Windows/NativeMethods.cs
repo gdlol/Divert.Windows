@@ -90,4 +90,13 @@ internal static unsafe partial class NativeMethods
         IntPtr* errorStr,
         uint* errorPos
     );
+
+    [LibraryImport(dllName, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool WinDivertHelperFormatFilter(
+        IntPtr filter,
+        WINDIVERT_LAYER layer,
+        byte* buffer,
+        uint bufLen
+    );
 }

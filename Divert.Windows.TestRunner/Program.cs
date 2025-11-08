@@ -85,9 +85,12 @@ try
         Console.WriteLine("Waiting for client connection...");
         using var client = await listener.AcceptSocketAsync(token);
         Console.WriteLine("Received client connection.");
+
+        using var sessionCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+        var sessionToken = sessionCts.Token;
         using var stream = new NetworkStream(client, ownsSocket: false);
         using var process = LaunchTestProcess(redirect: true);
-        using var _ = token.Register(() => process.Kill(entireProcessTree: true));
+        using var _ = sessionToken.Register(() => process.Kill(entireProcessTree: true));
 
         var lines = Channel.CreateBounded<string>(1024);
         var stdOutReader = new StreamReader(process.StandardOutput.BaseStream);
@@ -98,28 +101,42 @@ try
             string? line = null;
             while (true)
             {
-                line = await reader.ReadLineAsync(token);
+                line = await reader.ReadLineAsync(sessionToken);
                 if (line is null)
                 {
                     break;
                 }
-                await lines.Writer.WriteAsync(line, token);
+                await lines.Writer.WriteAsync(line, sessionToken);
             }
         }
         var readStdOutTask = ForwardLines(stdOutReader);
         var readStdErrTask = ForwardLines(stdErrReader);
 
         using var writer = new StreamWriter(stream) { AutoFlush = true };
+        var readTask = Task.Run(
+            async () =>
+            {
+                try
+                {
+                    await client.ReceiveAsync(new byte[ushort.MaxValue], sessionToken); // Monitor disconnect
+                }
+                finally
+                {
+                    sessionCts.Cancel();
+                }
+            },
+            sessionToken
+        );
         var writeTask = Task.Run(
             async () =>
             {
-                await foreach (var line in lines.Reader.ReadAllAsync(token))
+                await foreach (var line in lines.Reader.ReadAllAsync(sessionToken))
                 {
                     Console.WriteLine(line);
-                    await writer.WriteLineAsync(line.AsMemory(), token);
+                    await writer.WriteLineAsync(line.AsMemory(), sessionToken);
                 }
             },
-            token
+            sessionToken
         );
 
         await process.WaitForExitAsync(token);
@@ -127,8 +144,10 @@ try
         await Task.WhenAll(readStdOutTask, readStdErrTask, writeTask)
             .ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
         await writer
-            .WriteLineAsync(process.ExitCode.ToString().AsMemory(), token)
+            .WriteLineAsync(process.ExitCode.ToString().AsMemory(), sessionToken)
             .ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+        client.Close();
+        await readTask.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
     }
 }
 catch (OperationCanceledException) when (token.IsCancellationRequested) { }

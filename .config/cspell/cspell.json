@@ -15,6 +15,7 @@
     "getuid",
     "globalconfig",
     "globaltool",
+    "ICMPV6",
     "libc",
     "msbuild",
     "MSTEST",
