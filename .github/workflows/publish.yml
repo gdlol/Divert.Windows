@@ -22,9 +22,12 @@ jobs:
         uses: devcontainers/ci@v0.3
         env:
           NUGET_AUTHORS: ${{ github.repository_owner }}
+          NUGET_AUTHORS1: Testing
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         with:
           imageName: ghcr.io/${{ env.GITHUB_REPOSITORY }}/devcontainer
           cacheFrom: ghcr.io/${{ env.GITHUB_REPOSITORY }}/devcontainer
           push: never
-          runCmd: pnpm run publish
+          runCmd: |
+            echo "Publishing package..."
+            pnpm run publish

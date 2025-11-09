@@ -11,6 +11,8 @@ public class Pack : FrostingTask<Context>
     public override void Run(Context context)
     {
         context.CleanDirectory(Context.PackagesDirectory);
+        context.Information($"NUGET_AUTHORS: {Environment.GetEnvironmentVariable("NUGET_AUTHORS")}");
+        context.Information($"NUGET_AUTHORS1: {Environment.GetEnvironmentVariable("NUGET_AUTHORS1")}");
 
         using var repository = new Git.Repository(Context.ProjectRoot);
         string authors =
