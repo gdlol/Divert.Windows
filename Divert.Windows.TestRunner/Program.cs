@@ -38,7 +38,7 @@ Process LaunchTestProcess(bool redirect) =>
             Environment =
             {
                 // MSTest should respect DOTNET_SYSTEM_CONSOLE_ALLOW_ANSI_COLOR_REDIRECTION instead.
-                ["GITHUB_ACTIONS"] = "true", // Trick MSTest to output ANSI colors.
+                ["GITHUB_ACTIONS"] = redirect.ToString().ToLowerInvariant(), // Trick MSTest to output ANSI colors.
             },
         }
     )!;
@@ -96,9 +96,6 @@ try
         using var _ = sessionToken.Register(() => process.Kill(entireProcessTree: true));
 
         var lines = Channel.CreateBounded<string>(1024);
-        var stdOutReader = new StreamReader(process.StandardOutput.BaseStream);
-        var stdErrReader = new StreamReader(process.StandardError.BaseStream);
-
         async Task ForwardLines(StreamReader reader)
         {
             string? line = null;
@@ -112,8 +109,8 @@ try
                 await lines.Writer.WriteAsync(line, sessionToken);
             }
         }
-        var readStdOutTask = ForwardLines(stdOutReader);
-        var readStdErrTask = ForwardLines(stdErrReader);
+        var readStdOutTask = ForwardLines(process.StandardOutput);
+        var readStdErrTask = ForwardLines(process.StandardError);
 
         using var writer = new StreamWriter(stream) { AutoFlush = true };
         var readTask = Task.Run(

@@ -5,6 +5,7 @@
     "build": "pnpm run cake Build",
     "cake": "dotnet run --project Automation --target",
     "format": "pnpm run cake Format",
+    "git-push": "pnpm run cake GitPush",
     "lint": "pnpm run cake Lint",
     "pack": "pnpm run cake Pack",
     "restore": "pnpm run cake Restore",

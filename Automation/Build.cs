@@ -12,7 +12,17 @@ public class Build : FrostingTask<Context>
         context.CleanDirectory(Context.LocalWindowsDirectory);
         context.DotNetBuild(
             Context.ProjectRoot,
-            new() { MSBuildSettings = new() { TreatAllWarningsAs = MSBuildTreatAllWarningsAs.Error } }
+            new()
+            {
+                MSBuildSettings = new()
+                {
+                    TreatAllWarningsAs = MSBuildTreatAllWarningsAs.Error,
+                    Properties =
+                    {
+                        ["DivertWindowsTests"] = ["true"], // Enable DivertValueTaskExecutorDelay
+                    },
+                },
+            }
         );
     }
 }

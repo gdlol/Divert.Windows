@@ -5,7 +5,7 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(DivertWindowsTests)' == 'true'">
+  <PropertyGroup Condition="$(Configuration) != Release And $(DivertWindowsTests) == 'true'">
     <DefineConstants>$(DefineConstants);DIVERT_WINDOWS_TESTS</DefineConstants>
   </PropertyGroup>
 
@@ -21,12 +21,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="MinVer" Condition="'$(Configuration)' == 'Release'">
+    <PackageReference Include="MinVer" Condition="$(Configuration) == Release">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="$(ReadMePath)" Condition="'$(ReadMePath)' != ''" Pack="true" PackagePath="/" />
+    <None Include="$(ReadMePath)" Condition="$(ReadMePath) != ''" Pack="true" PackagePath="/" />
   </ItemGroup>
 </Project>
