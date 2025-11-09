@@ -6,6 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Cake.Frosting" />
+    <PackageReference Include="LibGit2Sharp" />
     <PackageReference Include="Mono.Posix" />
   </ItemGroup>
 </Project>

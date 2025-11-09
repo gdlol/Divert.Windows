@@ -15,4 +15,6 @@ public class Context(ICakeContext context) : FrostingContext(context)
     public static string LocalDirectory => Path.Combine(ProjectRoot, ".local");
 
     public static string LocalWindowsDirectory => Path.Combine(LocalDirectory, "windows");
+
+    public static string PackagesDirectory => Path.Combine(LocalDirectory, "packages");
 }
