@@ -43,8 +43,6 @@ jobs:
 
       - name: Build
         uses: devcontainers/ci@v0.3
-        env:
-          DivertWindowsTests: "true"
         with:
           cacheFrom: ghcr.io/${{ env.GITHUB_REPOSITORY }}/devcontainer
           push: never
@@ -66,9 +64,10 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: build-artifacts
+          path: .local/windows
 
       - name: Run Tests
-        run: ./.local/windows/Divert.Windows.TestRunner/Divert.Windows.TestRunner.exe
+        run: .local/windows/Divert.Windows.TestRunner/Divert.Windows.TestRunner.exe
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
@@ -84,6 +83,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: test-results
+          path: .local/windows
 
       - name: Codecov
         uses: codecov/codecov-action@v5
