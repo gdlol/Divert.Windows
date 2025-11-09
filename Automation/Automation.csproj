@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <NoWarn>CA2007</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Cake.Frosting" />
+    <PackageReference Include="LibGit2Sharp" />
+    <PackageReference Include="Mono.Posix" />
+  </ItemGroup>
+</Project>

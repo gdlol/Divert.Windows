@@ -1,0 +1,41 @@
+// spell-checker:ignore esbenp dotnettools
+{
+  "name": "divert-windows",
+  "dockerComposeFile": "compose.yaml",
+  "service": "devcontainer",
+  "remoteUser": "dev",
+  "overrideCommand": true,
+  "workspaceFolder": "/workspaces/divert-windows",
+  "features": {
+    "ghcr.io/devcontainer-config/features/user-init:2": {},
+    "ghcr.io/devcontainer-config/features/dot-config:3": {},
+    "ghcr.io/devcontainers/features/dotnet:2": { "version": "8.0" }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "esbenp.prettier-vscode",
+        "ms-azuretools.vscode-docker",
+        "streetsidesoftware.code-spell-checker",
+        "ms-dotnettools.csharp",
+        "csharpier.csharpier-vscode",
+        "github.vscode-github-actions"
+      ],
+      "settings": {
+        "files.associations": {
+          "ignore": "ignore",
+          "attributes": "properties",
+          "rc": "properties",
+          "*.globalconfig": "ini",
+          "app.manifest": "xml"
+        },
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "cSpell.autoFormatConfigFile": true,
+        "cSpell.checkOnlyEnabledFileTypes": false,
+        "[csharp]": { "editor.defaultFormatter": "csharpier.csharpier-vscode" }
+      }
+    }
+  },
+  "onCreateCommand": "pnpm install && pnpm restore || true"
+}

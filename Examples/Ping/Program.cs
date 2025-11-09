@@ -1,38 +1,31 @@
-﻿using System.Diagnostics;
-using System.Net;
+﻿using System.Net;
 using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using System.Runtime.Versioning;
-using System.Security.Principal;
 using Divert.Windows;
 
 [assembly: SupportedOSPlatform("windows6.0.6000")]
 
-var identity = WindowsIdentity.GetCurrent();
-var principal = new WindowsPrincipal(identity);
-if (!principal.IsInRole(WindowsBuiltInRole.Administrator))
-{
-    var startInfo = new ProcessStartInfo
-    {
-        FileName = Environment.ProcessPath,
-        Verb = "runas",
-        Arguments = args.Length > 0 ? args[0] : string.Empty,
-        UseShellExecute = true
-    };
-    Process.Start(startInfo);
-    Environment.Exit(0);
-}
+// Divert and re-inject ICMP packets to/from default gateway (or loopback if none).
 
-string remoteIP = args.Length > 0 ? args[0] : "8.8.8.8";
+string? remoteIP = args.Length > 0 ? args[0] : null;
+if (remoteIP is null)
+{
+    var gateWays =
+        from nic in NetworkInterface.GetAllNetworkInterfaces()
+        where
+            nic is { OperationalStatus: OperationalStatus.Up, NetworkInterfaceType: not NetworkInterfaceType.Loopback }
+        from gateway in nic.GetIPProperties().GatewayAddresses
+        let address = gateway.Address
+        where address is { AddressFamily: AddressFamily.InterNetwork }
+        select address;
+    remoteIP = gateWays.FirstOrDefault()?.ToString();
+}
+remoteIP ??= IPAddress.Loopback.ToString();
 
 var outboundFilter =
-    DivertFilter.Outbound
-    & !DivertFilter.Loopback
-    & DivertFilter.RemoteAddress == remoteIP
-    & DivertFilter.ICMP;
-var inboundFilter =
-    DivertFilter.Inbound
-    & DivertFilter.RemoteAddress == remoteIP
-    & DivertFilter.ICMP;
+    DivertFilter.Outbound & !DivertFilter.Loopback & DivertFilter.RemoteAddress == remoteIP & DivertFilter.ICMP;
+var inboundFilter = DivertFilter.Inbound & DivertFilter.RemoteAddress == remoteIP & DivertFilter.ICMP;
 Console.WriteLine($"{nameof(outboundFilter)}: {outboundFilter}");
 Console.WriteLine($"{nameof(inboundFilter)}: {inboundFilter}");
 
@@ -52,18 +45,20 @@ var ping = Task.Run(async () =>
         {
             Console.WriteLine(
                 $"Reply from {reply.Address} (Ping): "
-                + $"bytes={reply.Buffer?.Length} "
-                + $"time={reply.RoundtripTime}ms "
-                + $"TTL={reply.Options?.Ttl}");
+                    + $"bytes={reply.Buffer?.Length} "
+                    + $"time={reply.RoundtripTime}ms "
+                    + $"TTL={reply.Options?.Ttl}"
+            );
         }
         else
         {
             Console.WriteLine(reply.Status);
+            break;
         }
     }
 });
 
-var outbound = Task.Run(() =>
+var outbound = Task.Run(async () =>
 {
     using var cts = new CancellationTokenSource();
     cts.CancelAfter(3500);
@@ -73,11 +68,11 @@ var outbound = Task.Run(() =>
     {
         try
         {
-            var (packetLength, _) = outDivert.ReceiveEx(buffer, addresses, cts.Token);
-            var packet = buffer.AsSpan(0, packetLength);
-            var remoteAddress = new IPAddress(packet[16..20]);
+            (int packetLength, _) = await outDivert.ReceiveAsync(buffer, addresses, cts.Token).ConfigureAwait(false);
+            var packet = buffer.AsMemory(0, packetLength);
+            var remoteAddress = new IPAddress(packet[16..20].Span);
             Console.WriteLine($"Pinging {remoteAddress} with {packet.Length - 28} bytes of data (Divert):");
-            outDivert.Send(packet, addresses[0]);
+            await outDivert.SendAsync(packet, addresses, cts.Token);
         }
         catch (OperationCanceledException)
         {
@@ -92,25 +87,27 @@ var outbound = Task.Run(() =>
     }
 });
 
-var inbound = Task.Run(() =>
+var inbound = Task.Run(async () =>
 {
     using var cts = new CancellationTokenSource();
     cts.CancelAfter(2500);
     var buffer = new byte[ushort.MaxValue];
+    var addresses = new DivertAddress[1];
     while (true)
     {
         try
         {
-            var (packetLength, address) = inDivert.Receive(buffer);
-            var packet = buffer.AsSpan(0, packetLength);
-            var remoteAddress = new IPAddress(packet[12..16]);
-            long timestamp = BitConverter.ToInt64(packet.Slice(28, sizeof(long)));
+            (int packetLength, _) = await inDivert.ReceiveAsync(buffer, addresses, cts.Token).ConfigureAwait(false);
+            var packet = buffer.AsMemory(0, packetLength);
+            var remoteAddress = new IPAddress(packet[12..16].Span);
+            long timestamp = BitConverter.ToInt64(packet.Slice(28, sizeof(long)).Span);
             Console.WriteLine(
-                    $"Reply from {remoteAddress} (Divert): "
+                $"Reply from {remoteAddress} (Divert): "
                     + $"bytes={packet.Length - 28} "
                     + $"time={DateTimeOffset.Now.ToUnixTimeMilliseconds() - timestamp}ms "
-                    + $"TTL={packet[8]}");
-            inDivert.SendEx(packet, new[] { address }, cts.Token);
+                    + $"TTL={packet.Span[8]}"
+            );
+            await inDivert.SendAsync(packet, addresses, cts.Token);
         }
         catch (OperationCanceledException)
         {
@@ -125,4 +122,6 @@ var inbound = Task.Run(() =>
     }
 });
 
-await Task.WhenAll(ping, outbound, inbound);
+await Task.WhenAll(ping, outbound, inbound).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+Console.WriteLine("Done.");
+Console.ReadLine();

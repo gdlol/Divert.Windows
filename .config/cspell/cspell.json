@@ -1,0 +1,30 @@
+{
+  "version": "0.2",
+  "enableGlobDot": true,
+  "useGitignore": true,
+  "gitignoreRoot": ".",
+  "ignorePaths": ["LICENSE"],
+  "words": [
+    "CIFS",
+    "csharpierignore",
+    "csharpierrc",
+    "devcontainer",
+    "devcontainers",
+    "Finalizers",
+    "getgid",
+    "getuid",
+    "globalconfig",
+    "globaltool",
+    "ICMPV6",
+    "libc",
+    "msbuild",
+    "MSTEST",
+    "packagejson",
+    "reportgenerator",
+    "runas",
+    "runsettings",
+    "statvfs",
+    "Syscall",
+    "WINDIVERT"
+  ]
+}

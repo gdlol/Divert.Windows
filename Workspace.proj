@@ -1,0 +1,6 @@
+<Project>
+  <Sdk Name="Microsoft.Build.Traversal" Version="4.1.82" />
+  <ItemGroup>
+    <ProjectReference Include="$(MSBuildThisFileDirectory)**/*.csproj" />
+  </ItemGroup>
+</Project>

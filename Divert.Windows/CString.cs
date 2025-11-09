@@ -2,14 +2,9 @@ using System.Runtime.InteropServices;
 
 namespace Divert.Windows;
 
-internal class CString : IDisposable
+internal sealed class CString(string str) : IDisposable
 {
-    internal IntPtr Ptr { get; }
-
-    public CString(string str)
-    {
-        Ptr = Marshal.StringToHGlobalAnsi(str);
-    }
+    internal IntPtr Pointer { get; } = Marshal.StringToHGlobalAnsi(str);
 
     private bool disposed;
 
@@ -17,14 +12,8 @@ internal class CString : IDisposable
     {
         if (!disposed)
         {
-            Marshal.FreeHGlobal(Ptr);
+            Marshal.FreeHGlobal(Pointer);
             disposed = true;
         }
-        GC.SuppressFinalize(this);
-    }
-
-    ~CString()
-    {
-        Dispose();
     }
 }

@@ -1,268 +1,331 @@
 using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Runtime.Versioning;
-using Windows.Win32;
+using System.Threading.Channels;
+using Divert.Windows.AsyncOperation;
 using Windows.Win32.Foundation;
-
-[assembly: SupportedOSPlatform("windows6.0.6000")]
 
 namespace Divert.Windows;
 
-unsafe sealed public class DivertService : IDisposable
+/// <summary>
+/// Main entry point for WinDivert operations.
+/// </summary>
+public sealed unsafe class DivertService : IDisposable
 {
-    internal HANDLE Handle { get; }
+    /// <summary>
+    /// The highest priority for a WinDivert handle.
+    /// </summary>
+    public const int HighestPriority = Constants.WINDIVERT_PRIORITY_HIGHEST;
 
     /// <summary>
-    /// Opens a WinDivert handle for the given filter.
+    /// The lowest priority for a WinDivert handle.
     /// </summary>
-    /// <param name="filter">A packet filter string specified in the WinDivert filter language.</param>
+    public const int LowestPriority = Constants.WINDIVERT_PRIORITY_LOWEST;
+
+    /// <summary>
+    /// The default packet queue length for receive operations.
+    /// </summary>
+    public const int DefaultQueueLength = Constants.WINDIVERT_PARAM_QUEUE_LENGTH_DEFAULT;
+
+    /// <summary>
+    /// The minimum packet queue length for receive operations.
+    /// </summary>
+    public const int MinQueueLength = Constants.WINDIVERT_PARAM_QUEUE_LENGTH_MIN;
+
+    /// <summary>
+    /// The maximum packet queue length for receive operations.
+    /// </summary>
+    public const int MaxQueueLength = Constants.WINDIVERT_PARAM_QUEUE_LENGTH_MAX;
+
+    /// <summary>
+    /// The default packet queue time.
+    /// </summary>
+    public static TimeSpan DefaultQueueTime => TimeSpan.FromMilliseconds(Constants.WINDIVERT_PARAM_QUEUE_TIME_DEFAULT);
+
+    /// <summary>
+    /// The minimum packet queue time.
+    /// </summary>
+    public static TimeSpan MinQueueTime => TimeSpan.FromMilliseconds(Constants.WINDIVERT_PARAM_QUEUE_TIME_MIN);
+
+    /// <summary>
+    /// The maximum packet queue time.
+    /// </summary>
+    public static TimeSpan MaxQueueTime => TimeSpan.FromMilliseconds(Constants.WINDIVERT_PARAM_QUEUE_TIME_MAX);
+
+    /// <summary>
+    /// The default max number of bytes in the packet queue for receive operations.
+    /// </summary>
+    public const int DefaultQueueSize = Constants.WINDIVERT_PARAM_QUEUE_SIZE_DEFAULT;
+
+    /// <summary>
+    /// The minimum max number of bytes in the packet queue for receive operations.
+    /// </summary>
+    public const int MinQueueSize = Constants.WINDIVERT_PARAM_QUEUE_SIZE_MIN;
+
+    /// <summary>
+    /// The maximum max number of bytes in the packet queue for receive operations.
+    /// </summary>
+    public const int MaxQueueSize = Constants.WINDIVERT_PARAM_QUEUE_SIZE_MAX;
+
+    /// <summary>
+    /// The maximum number of packets in a single send or receive operation.
+    /// </summary>
+    public const int MaxBatchSize = Constants.WINDIVERT_BATCH_MAX;
+
+    private readonly DivertHandle divertHandle;
+    private readonly bool runContinuationsAsynchronously;
+
+    private readonly ThreadPoolBoundHandle threadPoolBoundHandle;
+    private readonly Channel<DivertValueTaskSource> sendVtsPool;
+    private readonly Channel<DivertValueTaskSource> receiveVtsPool;
+    private readonly DivertReceiveExecutor receiveExecutor;
+    private readonly DivertSendExecutor sendExecutor;
+
+    private DivertService(DivertHandle divertHandle)
+    {
+        this.divertHandle = divertHandle;
+        threadPoolBoundHandle = ThreadPoolBoundHandle.BindHandle(divertHandle);
+        sendVtsPool = Channel.CreateUnbounded<DivertValueTaskSource>();
+        receiveVtsPool = Channel.CreateUnbounded<DivertValueTaskSource>();
+        receiveExecutor = new DivertReceiveExecutor();
+        sendExecutor = new DivertSendExecutor();
+    }
+
+    private static DivertHandle OpenHandle(
+        ReadOnlySpan<byte> filter,
+        DivertLayer layer,
+        short priority,
+        DivertFlags flags
+    )
+    {
+        if (priority < LowestPriority || priority > HighestPriority)
+        {
+            throw new ArgumentOutOfRangeException(nameof(priority));
+        }
+
+        var pBuffer = Unsafe.AsPointer(ref MemoryMarshal.GetReference(filter));
+        var handle = NativeMethods.WinDivertOpen(new(pBuffer), (WINDIVERT_LAYER)layer, priority, (ulong)flags);
+        if (new HANDLE(handle) == HANDLE.INVALID_HANDLE_VALUE)
+        {
+            throw new Win32Exception(Marshal.GetLastPInvokeError());
+        }
+        return new DivertHandle(handle);
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DivertService"/> class.
+    /// </summary>
+    /// <param name="filter">The packet filter.</param>
     /// <param name="layer">The layer.</param>
     /// <param name="priority">The priority of the handle.</param>
-    /// <param name="flags">Additional flags.</param>
+    /// <param name="flags">The handle flags.</param>
+    /// <param name="runContinuationsAsynchronously">Whether to force continuations to run asynchronously.</param>
     public DivertService(
         DivertFilter filter,
         DivertLayer layer = DivertLayer.Network,
         short priority = 0,
-        DivertFlags flags = DivertFlags.None)
+        DivertFlags flags = DivertFlags.None,
+        bool runContinuationsAsynchronously = true
+    )
+        : this(OpenHandle(DivertHelper.CompileFilter(filter, layer), layer, priority, flags))
     {
-        ArgumentNullException.ThrowIfNull(filter);
+        this.runContinuationsAsynchronously = runContinuationsAsynchronously;
+    }
 
-        using var s = new CString(filter.Clause);
-        IntPtr errorStr;
-        uint errorPos;
-        bool success = NativeMethods.WinDivertHelperCompileFilter(
-            s.Ptr,
-            (WINDIVERT_LAYER)layer,
-            null,
-            0,
-            &errorStr,
-            &errorPos);
-        if (!success)
-        {
-            string? errorString = Marshal.PtrToStringAnsi(errorStr);
-            throw new ArgumentException($"{errorPos}: {errorString}", nameof(filter));
-        }
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DivertService"/> class.
+    /// </summary>
+    /// <param name="filter">The packet filter.</param>
+    /// <param name="layer">The layer.</param>
+    /// <param name="priority">The priority of the handle.</param>
+    /// <param name="flags">The handle flags.</param>
+    /// <param name="runContinuationsAsynchronously">Whether to force continuations to run asynchronously.</param>
+    public DivertService(
+        ReadOnlySpan<byte> filter,
+        DivertLayer layer = DivertLayer.Network,
+        short priority = 0,
+        DivertFlags flags = DivertFlags.None,
+        bool runContinuationsAsynchronously = true
+    )
+        : this(OpenHandle(filter, layer, priority, flags))
+    {
+        this.runContinuationsAsynchronously = runContinuationsAsynchronously;
+    }
 
-        var handle = NativeMethods.WinDivertOpen(s.Ptr, (WINDIVERT_LAYER)layer, priority, (ulong)flags);
-        if (handle.Value.ToInt64() == -1)
-        {
-            throw new Win32Exception(Marshal.GetLastWin32Error());
-        }
-        Handle = handle;
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DivertService"/> class.
+    /// </summary>
+    /// <param name="handle">An existing WinDivert handle.</param>
+    /// <param name="runContinuationsAsynchronously">Whether to force continuations to run asynchronously.</param>
+    public DivertService(SafeHandle handle, bool runContinuationsAsynchronously = true)
+        : this(new DivertHandle(handle.DangerousGetHandle(), ownsHandle: false))
+    {
+        this.runContinuationsAsynchronously = runContinuationsAsynchronously;
     }
 
     private bool disposed = false;
 
-    public void Dispose()
+    private static void DisposeVtsPool(Channel<DivertValueTaskSource> pool)
     {
-        if (!disposed)
+        pool.Writer.TryComplete();
+        while (pool.Reader.TryRead(out var vts))
         {
-            bool success = NativeMethods.WinDivertClose(Handle);
-            if (!success)
-            {
-                throw new Win32Exception(Marshal.GetLastWin32Error());
-            }
-            disposed = true;
+            vts.Dispose();
         }
-        GC.SuppressFinalize(this);
     }
 
-    ~DivertService()
-    {
-        Dispose();
-    }
-
-    internal void ThrowIfDisposed()
+    /// <summary>
+    /// Releases all resources used by the <see cref="DivertService"/>.
+    /// </summary>
+    public void Dispose()
     {
         if (disposed)
         {
-            throw new ObjectDisposedException(nameof(DivertService));
+            return;
+        }
+        disposed = true;
+
+        DisposeVtsPool(sendVtsPool);
+        DisposeVtsPool(receiveVtsPool);
+        threadPoolBoundHandle.Dispose();
+        divertHandle.Dispose();
+    }
+
+    /// <summary>
+    /// Gets the underlying WinDivert handle.
+    /// </summary>
+    public DivertHandle SafeHandle => divertHandle;
+
+    private DivertValueTaskSource GetVts(Channel<DivertValueTaskSource> vtsPool)
+    {
+        if (!vtsPool.Reader.TryRead(out var vts))
+        {
+            vts = new DivertValueTaskSource(
+                sendVtsPool,
+                divertHandle,
+                threadPoolBoundHandle,
+                runContinuationsAsynchronously
+            );
+        }
+        return vts;
+    }
+
+    /// <summary>
+    /// Receives one or more packets from the network stack.
+    /// </summary>
+    /// <param name="buffer">Buffer to receive the packet data.</param>
+    /// <param name="addresses">Buffer to receive the packet addresses.</param>
+    /// <param name="cancellationToken">Token to observe cancellation requests.</param>
+    /// <returns>A ValueTask representing the asynchronous receive operation.</returns>
+    public ValueTask<DivertReceiveResult> ReceiveAsync(
+        Memory<byte> buffer,
+        Memory<DivertAddress> addresses,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return ValueTask.FromCanceled<DivertReceiveResult>(cancellationToken);
+        }
+
+        var vts = GetVts(receiveVtsPool);
+        return receiveExecutor.ReceiveAsync(vts, buffer, addresses, cancellationToken);
+    }
+
+    /// <summary>
+    /// Injects one or more packets into the network stack.
+    /// </summary>
+    /// <param name="buffer">Buffer containing the packet data.</param>
+    /// <param name="addresses">Addresses of the packets to be injected.</param>
+    /// <param name="cancellationToken">Token to observe cancellation requests.</param>
+    /// <returns>A ValueTask representing the asynchronous send operation.</returns>
+    public ValueTask<int> SendAsync(
+        ReadOnlyMemory<byte> buffer,
+        ReadOnlyMemory<DivertAddress> addresses,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return ValueTask.FromCanceled<int>(cancellationToken);
+        }
+
+        var vts = GetVts(sendVtsPool);
+        return sendExecutor.SendAsync(vts, buffer, addresses, cancellationToken);
+    }
+
+    /// <summary>
+    /// Gets the version of the WinDivert driver.
+    /// </summary>
+    public Version Version
+    {
+        get
+        {
+            int major = (int)
+                DivertIOControl.GetParam(threadPoolBoundHandle, WINDIVERT_PARAM.WINDIVERT_PARAM_VERSION_MAJOR);
+            int minor = (int)
+                DivertIOControl.GetParam(threadPoolBoundHandle, WINDIVERT_PARAM.WINDIVERT_PARAM_VERSION_MINOR);
+            return new Version(major, minor);
         }
     }
 
-    public void Shutdown(DivertShutdown how)
+    /// <summary>
+    /// Gets or sets the length of the receive queue.
+    /// </summary>
+    public int QueueLength
     {
-        ThrowIfDisposed();
-
-        bool success = NativeMethods.WinDivertShutdown(Handle, (WINDIVERT_SHUTDOWN)how);
-        if (!success)
+        get => (int)DivertIOControl.GetParam(threadPoolBoundHandle, WINDIVERT_PARAM.WINDIVERT_PARAM_QUEUE_LENGTH);
+        set
         {
-            throw new Win32Exception(Marshal.GetLastWin32Error());
+            if (value < MinQueueLength || value > MaxQueueLength)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value));
+            }
+
+            DivertIOControl.SetParam(threadPoolBoundHandle, WINDIVERT_PARAM.WINDIVERT_PARAM_QUEUE_LENGTH, (ulong)value);
         }
     }
 
-    public (int packetLength, DivertAddress address) Receive(Span<byte> buffer)
+    /// <summary>
+    /// Gets or sets the maximum packet queue time.
+    /// </summary>
+    public TimeSpan QueueTime
     {
-        ThrowIfDisposed();
-
-        uint packetLength;
-        WINDIVERT_ADDRESS address;
-        fixed (byte* pBuffer = buffer)
+        get =>
+            TimeSpan.FromMilliseconds(
+                DivertIOControl.GetParam(threadPoolBoundHandle, WINDIVERT_PARAM.WINDIVERT_PARAM_QUEUE_TIME)
+            );
+        set
         {
-            bool success = NativeMethods.WinDivertRecv(
-                Handle,
-                pBuffer, checked((uint)buffer.Length),
-                &packetLength,
-                &address);
-            if (!success)
+            if (value < MinQueueTime || value > MaxQueueTime)
             {
-                throw new Win32Exception(Marshal.GetLastWin32Error());
+                throw new ArgumentOutOfRangeException(nameof(value));
             }
-        }
-        return ((int)packetLength, new DivertAddress(address));
-    }
 
-    public (int packetLength, int addressLength) ReceiveEx(
-        Span<byte> buffer,
-        Span<DivertAddress> addresses,
-        CancellationToken cancellationToken = default)
-    {
-        ThrowIfDisposed();
-        cancellationToken.ThrowIfCancellationRequested();
-
-        using var eventHandle = new ManualResetEvent(initialState: false);
-        using var _ = cancellationToken.Register(() => eventHandle.Set());
-        var overlapped = new NativeOverlapped
-        {
-            EventHandle = eventHandle.SafeWaitHandle.DangerousGetHandle()
-        };
-        uint addrLen = (uint)(sizeof(DivertAddress) * addresses.Length);
-        fixed (byte* pBuffer = buffer)
-        fixed (DivertAddress* pAddr = addresses)
-        {
-            bool success = NativeMethods.WinDivertRecvEx(
-                Handle,
-                pBuffer, checked((uint)buffer.Length),
-                null,
-                0,
-                (WINDIVERT_ADDRESS*)pAddr,
-                &addrLen,
-                &overlapped);
-            if (!success)
-            {
-                int error = Marshal.GetLastWin32Error();
-                if (error == 997) // ERROR_IO_PENDING
-                {
-                    eventHandle.WaitOne();
-                    if (cancellationToken.IsCancellationRequested)
-                    {
-                        success = PInvoke.CancelIoEx(Handle, &overlapped);
-                        if (!success)
-                        {
-                            error = Marshal.GetLastWin32Error();
-                            if (error != 1168) // ERROR_NOT_FOUND
-                            {
-                                throw new Win32Exception(error);
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    throw new Win32Exception(error);
-                }
-            }
-            uint packetsLength;
-            success = PInvoke.GetOverlappedResult(Handle, &overlapped, &packetsLength, true);
-            if (!success)
-            {
-                int error = Marshal.GetLastWin32Error();
-                if (error == 995) // ERROR_OPERATION_ABORTED
-                {
-                    throw new OperationCanceledException();
-                }
-                else
-                {
-                    throw new Win32Exception(error);
-                }
-            }
-            int addressLength = (int)addrLen / sizeof(DivertAddress);
-            return ((int)packetsLength, addressLength);
+            DivertIOControl.SetParam(
+                threadPoolBoundHandle,
+                WINDIVERT_PARAM.WINDIVERT_PARAM_QUEUE_TIME,
+                (ulong)value.TotalMilliseconds
+            );
         }
     }
 
-    public void Send(ReadOnlySpan<byte> buffer, DivertAddress address)
+    /// <summary>
+    /// Gets or sets the maximum number of bytes in the receive queue.
+    /// </summary>
+    public int QueueSize
     {
-        ThrowIfDisposed();
-
-        var divertAddress = address.Struct;
-        fixed (byte* pBuffer = buffer)
+        get => (int)DivertIOControl.GetParam(threadPoolBoundHandle, WINDIVERT_PARAM.WINDIVERT_PARAM_QUEUE_SIZE);
+        set
         {
-            bool success = NativeMethods.WinDivertSend(
-                Handle,
-                pBuffer, checked((uint)buffer.Length),
-                null,
-                &divertAddress);
-            if (!success)
+            if (value < MinQueueSize || value > MaxQueueSize)
             {
-                throw new Win32Exception(Marshal.GetLastWin32Error());
+                throw new ArgumentOutOfRangeException(nameof(value));
             }
-        }
-    }
 
-    public void SendEx(
-        ReadOnlySpan<byte> buffer,
-        Span<DivertAddress> addresses,
-        CancellationToken cancellationToken = default)
-    {
-        ThrowIfDisposed();
-        cancellationToken.ThrowIfCancellationRequested();
-
-        using var eventHandle = new ManualResetEvent(initialState: false);
-        using var _ = cancellationToken.Register(() => eventHandle.Set());
-        var overlapped = new NativeOverlapped
-        {
-            EventHandle = eventHandle.SafeWaitHandle.DangerousGetHandle()
-        };
-        fixed (byte* pBuffer = buffer)
-        fixed (DivertAddress* pAddr = addresses)
-        {
-            bool success = NativeMethods.WinDivertSendEx(
-                Handle,
-                pBuffer, checked((uint)buffer.Length),
-                null,
-                0,
-                (WINDIVERT_ADDRESS*)pAddr,
-                (uint)(sizeof(WINDIVERT_ADDRESS) * addresses.Length),
-                &overlapped);
-            if (!success)
-            {
-                int error = Marshal.GetLastWin32Error();
-                if (error == 997) // ERROR_IO_PENDING
-                {
-                    eventHandle.WaitOne();
-                    if (cancellationToken.IsCancellationRequested)
-                    {
-                        success = PInvoke.CancelIoEx(Handle, &overlapped);
-                        if (!success)
-                        {
-                            error = Marshal.GetLastWin32Error();
-                            if (error != 1168) // ERROR_NOT_FOUND
-                            {
-                                throw new Win32Exception(error);
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    throw new Win32Exception(error);
-                }
-            }
-            uint bytesSent;
-            success = PInvoke.GetOverlappedResult(Handle, &overlapped, &bytesSent, true);
-            if (!success)
-            {
-                int error = Marshal.GetLastWin32Error();
-                if (error == 995) // ERROR_OPERATION_ABORTED
-                {
-                    throw new OperationCanceledException();
-                }
-                else
-                {
-                    throw new Win32Exception(error);
-                }
-            }
+            DivertIOControl.SetParam(threadPoolBoundHandle, WINDIVERT_PARAM.WINDIVERT_PARAM_QUEUE_SIZE, (ulong)value);
         }
     }
 }

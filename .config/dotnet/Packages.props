@@ -1,0 +1,15 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="Cake.Frosting" Version="5.1.0" />
+    <PackageVersion Include="coverlet.msbuild" Version="6.0.4" />
+    <PackageVersion Include="LibGit2Sharp" Version="0.31.0" />
+    <PackageVersion Include="Microsoft.Windows.CsWin32" Version="0.3.205" />
+    <PackageVersion Include="MinVer" Version="6.0.0" />
+    <PackageVersion Include="Mono.Posix" Version="7.1.0-final.1.21458.1" />
+    <PackageVersion Include="MSTest" Version="4.0.1" />
+    <PackageVersion Include="Native.WinDivert" Version="2.2.2" />
+  </ItemGroup>
+</Project>
