@@ -17,6 +17,8 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Pack
         uses: devcontainers/ci@v0.3
@@ -34,7 +36,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: nuget-package
-          path: .local/packages
+          path: .local/packages/*
 
       - name: Publish
         uses: devcontainers/ci@v0.3
