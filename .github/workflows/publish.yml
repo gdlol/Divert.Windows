@@ -31,3 +31,6 @@ jobs:
           runCmd: |
             echo "Publishing package..."
             pnpm run publish
+          env: |
+            NUGET_AUTHORS
+            NUGET_AUTHORS1
