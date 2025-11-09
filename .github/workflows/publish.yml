@@ -21,6 +21,7 @@ jobs:
       - name: Publish
         uses: devcontainers/ci@v0.3
         env:
+          NUGET_AUTHORS: ${{ github.repository_owner }}
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         with:
           imageName: ghcr.io/${{ env.GITHUB_REPOSITORY }}/devcontainer

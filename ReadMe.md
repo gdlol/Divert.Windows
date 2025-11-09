@@ -5,10 +5,12 @@
 [Codecov Badge]: https://img.shields.io/codecov/c/github/gdlol/Divert.Windows
 [Codecov URL]: https://codecov.io/gh/gdlol/Divert.Windows
 [License Badge]: https://img.shields.io/github/license/gdlol/Divert.Windows
+[NuGet Version]: https://img.shields.io/nuget/v/Divert.Windows
 
 [![CI Badge][CI Badge]][CI URL]
 [![Codecov Badge][Codecov Badge]][Codecov URL]
 [![License Badge][License Badge]](LICENSE)
+[![NuGet Version][NuGet Version]](https://www.nuget.org/packages/Divert.Windows)
 
 High quality .NET APIs for WinDivert.
 
