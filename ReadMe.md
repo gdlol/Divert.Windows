@@ -25,3 +25,7 @@ Console.WriteLine($"{message} from WinDivert!");
 ```
 
 See also [Examples/](Examples/)
+
+# License
+
+[LGPL-3.0](LICENSE)
