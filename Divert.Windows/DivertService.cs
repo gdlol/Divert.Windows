@@ -12,17 +12,65 @@ namespace Divert.Windows;
 /// </summary>
 public sealed unsafe class DivertService : IDisposable
 {
+    /// <summary>
+    /// The highest priority for a WinDivert handle.
+    /// </summary>
     public const int HighestPriority = Constants.WINDIVERT_PRIORITY_HIGHEST;
+
+    /// <summary>
+    /// The lowest priority for a WinDivert handle.
+    /// </summary>
     public const int LowestPriority = Constants.WINDIVERT_PRIORITY_LOWEST;
+
+    /// <summary>
+    /// The default packet queue length for receive operations.
+    /// </summary>
     public const int DefaultQueueLength = Constants.WINDIVERT_PARAM_QUEUE_LENGTH_DEFAULT;
+
+    /// <summary>
+    /// The minimum packet queue length for receive operations.
+    /// </summary>
     public const int MinQueueLength = Constants.WINDIVERT_PARAM_QUEUE_LENGTH_MIN;
+
+    /// <summary>
+    /// The maximum packet queue length for receive operations.
+    /// </summary>
     public const int MaxQueueLength = Constants.WINDIVERT_PARAM_QUEUE_LENGTH_MAX;
+
+    /// <summary>
+    /// The default packet queue time.
+    /// </summary>
     public static TimeSpan DefaultQueueTime => TimeSpan.FromMilliseconds(Constants.WINDIVERT_PARAM_QUEUE_TIME_DEFAULT);
+
+    /// <summary>
+    /// The minimum packet queue time.
+    /// </summary>
     public static TimeSpan MinQueueTime => TimeSpan.FromMilliseconds(Constants.WINDIVERT_PARAM_QUEUE_TIME_MIN);
+
+    /// <summary>
+    /// The maximum packet queue time.
+    /// </summary>
     public static TimeSpan MaxQueueTime => TimeSpan.FromMilliseconds(Constants.WINDIVERT_PARAM_QUEUE_TIME_MAX);
+
+    /// <summary>
+    /// The default max number of bytes in the packet queue for receive operations.
+    /// </summary>
     public const int DefaultQueueSize = Constants.WINDIVERT_PARAM_QUEUE_SIZE_DEFAULT;
+
+    /// <summary>
+    /// The minimum max number of bytes in the packet queue for receive operations.
+    /// </summary>
     public const int MinQueueSize = Constants.WINDIVERT_PARAM_QUEUE_SIZE_MIN;
+
+    /// <summary>
+    /// The maximum max number of bytes in the packet queue for receive operations.
+    /// </summary>
     public const int MaxQueueSize = Constants.WINDIVERT_PARAM_QUEUE_SIZE_MAX;
+
+    /// <summary>
+    /// The maximum number of packets in a single send or receive operation.
+    /// </summary>
+    public const int MaxBatchSize = Constants.WINDIVERT_BATCH_MAX;
 
     private readonly DivertHandle divertHandle;
     private readonly bool runContinuationsAsynchronously;
@@ -41,21 +89,6 @@ public sealed unsafe class DivertService : IDisposable
         receiveVtsPool = Channel.CreateUnbounded<DivertValueTaskSource>();
         receiveExecutor = new DivertReceiveExecutor();
         sendExecutor = new DivertSendExecutor();
-    }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="DivertService"/> class.
-    /// </summary>
-    public DivertService(
-        DivertFilter filter,
-        DivertLayer layer = DivertLayer.Network,
-        short priority = 0,
-        DivertFlags flags = DivertFlags.None,
-        bool runContinuationsAsynchronously = true
-    )
-        : this(OpenHandle(DivertHelper.CompileFilter(filter, layer), layer, priority, flags))
-    {
-        this.runContinuationsAsynchronously = runContinuationsAsynchronously;
     }
 
     private static DivertHandle OpenHandle(
@@ -82,6 +115,31 @@ public sealed unsafe class DivertService : IDisposable
     /// <summary>
     /// Initializes a new instance of the <see cref="DivertService"/> class.
     /// </summary>
+    /// <param name="filter">The packet filter.</param>
+    /// <param name="layer">The layer.</param>
+    /// <param name="priority">The priority of the handle.</param>
+    /// <param name="flags">The handle flags.</param>
+    /// <param name="runContinuationsAsynchronously">Whether to force continuations to run asynchronously.</param>
+    public DivertService(
+        DivertFilter filter,
+        DivertLayer layer = DivertLayer.Network,
+        short priority = 0,
+        DivertFlags flags = DivertFlags.None,
+        bool runContinuationsAsynchronously = true
+    )
+        : this(OpenHandle(DivertHelper.CompileFilter(filter, layer), layer, priority, flags))
+    {
+        this.runContinuationsAsynchronously = runContinuationsAsynchronously;
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DivertService"/> class.
+    /// </summary>
+    /// <param name="filter">The packet filter.</param>
+    /// <param name="layer">The layer.</param>
+    /// <param name="priority">The priority of the handle.</param>
+    /// <param name="flags">The handle flags.</param>
+    /// <param name="runContinuationsAsynchronously">Whether to force continuations to run asynchronously.</param>
     public DivertService(
         ReadOnlySpan<byte> filter,
         DivertLayer layer = DivertLayer.Network,
@@ -97,6 +155,8 @@ public sealed unsafe class DivertService : IDisposable
     /// <summary>
     /// Initializes a new instance of the <see cref="DivertService"/> class.
     /// </summary>
+    /// <param name="handle">An existing WinDivert handle.</param>
+    /// <param name="runContinuationsAsynchronously">Whether to force continuations to run asynchronously.</param>
     public DivertService(SafeHandle handle, bool runContinuationsAsynchronously = true)
         : this(new DivertHandle(handle.DangerousGetHandle(), ownsHandle: false))
     {
@@ -131,6 +191,9 @@ public sealed unsafe class DivertService : IDisposable
         divertHandle.Dispose();
     }
 
+    /// <summary>
+    /// Gets the underlying WinDivert handle.
+    /// </summary>
     public DivertHandle SafeHandle => divertHandle;
 
     private DivertValueTaskSource GetVts(Channel<DivertValueTaskSource> vtsPool)
@@ -193,6 +256,9 @@ public sealed unsafe class DivertService : IDisposable
         return sendExecutor.SendAsync(vts, buffer, addresses, cancellationToken);
     }
 
+    /// <summary>
+    /// Gets the version of the WinDivert driver.
+    /// </summary>
     public Version Version
     {
         get
@@ -205,6 +271,9 @@ public sealed unsafe class DivertService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Gets or sets the length of the receive queue.
+    /// </summary>
     public int QueueLength
     {
         get => (int)DivertIOControl.GetParam(threadPoolBoundHandle, WINDIVERT_PARAM.WINDIVERT_PARAM_QUEUE_LENGTH);
@@ -219,6 +288,9 @@ public sealed unsafe class DivertService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Gets or sets the maximum packet queue time.
+    /// </summary>
     public TimeSpan QueueTime
     {
         get =>
@@ -240,6 +312,9 @@ public sealed unsafe class DivertService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Gets or sets the maximum number of bytes in the receive queue.
+    /// </summary>
     public int QueueSize
     {
         get => (int)DivertIOControl.GetParam(threadPoolBoundHandle, WINDIVERT_PARAM.WINDIVERT_PARAM_QUEUE_SIZE);

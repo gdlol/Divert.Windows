@@ -1,27 +1,12 @@
-﻿using System.Diagnostics;
-using System.Net;
+﻿using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Runtime.Versioning;
-using System.Security.Principal;
 using Divert.Windows;
 
 [assembly: SupportedOSPlatform("windows6.0.6000")]
 
-var identity = WindowsIdentity.GetCurrent();
-var principal = new WindowsPrincipal(identity);
-if (!principal.IsInRole(WindowsBuiltInRole.Administrator))
-{
-    var startInfo = new ProcessStartInfo
-    {
-        FileName = Environment.ProcessPath,
-        Verb = "runas",
-        Arguments = args.Length > 0 ? args[0] : string.Empty,
-        UseShellExecute = true,
-    };
-    Process.Start(startInfo);
-    Environment.Exit(0);
-}
+// Divert and re-inject ICMP packets to/from default gateway (or loopback if none).
 
 string? remoteIP = args.Length > 0 ? args[0] : null;
 if (remoteIP is null)
@@ -36,7 +21,7 @@ if (remoteIP is null)
         select address;
     remoteIP = gateWays.FirstOrDefault()?.ToString();
 }
-remoteIP ??= "1.1.1.1";
+remoteIP ??= IPAddress.Loopback.ToString();
 
 var outboundFilter =
     DivertFilter.Outbound & !DivertFilter.Loopback & DivertFilter.RemoteAddress == remoteIP & DivertFilter.ICMP;

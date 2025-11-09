@@ -1,5 +1,10 @@
 namespace Divert.Windows;
 
+/// <summary>
+/// Represents the result of a Divert receive operation.
+/// </summary>
+/// <param name="dataLength">The length of the received data.</param>
+/// <param name="addressLength">The length of the addresses.</param>
 public readonly struct DivertReceiveResult(int dataLength, int addressLength)
 {
     /// <summary>

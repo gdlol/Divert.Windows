@@ -13,4 +13,5 @@ internal static class Constants
     public const int WINDIVERT_PARAM_QUEUE_SIZE_DEFAULT = 4 * 1024 * 1024;
     public const int WINDIVERT_PARAM_QUEUE_SIZE_MIN = 64 * 1024;
     public const int WINDIVERT_PARAM_QUEUE_SIZE_MAX = 32 * 1024 * 1024;
+    public const int WINDIVERT_BATCH_MAX = byte.MaxValue;
 }

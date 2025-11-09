@@ -5,8 +5,19 @@ using Windows.Win32.Foundation;
 
 namespace Divert.Windows;
 
+/// <summary>
+/// WinDivert helper methods.
+/// </summary>
 public static unsafe class DivertHelper
 {
+    /// <summary>
+    /// Calculates the checksums for the specified packet.
+    /// </summary>
+    /// <param name="packet">
+    /// The packet data.
+    /// </param>
+    /// <param name="flags">The flags to disable individual checksum calculations.</param>
+    /// <returns>true if the checksums were calculated successfully; otherwise, false.</returns>
     public static bool CalculateChecksums(Span<byte> packet, DivertHelperFlags flags = DivertHelperFlags.None)
     {
         fixed (byte* pPacket = packet)
@@ -15,6 +26,17 @@ public static unsafe class DivertHelper
         }
     }
 
+    /// <summary>
+    /// Calculates the checksums for the specified packet.
+    /// </summary>
+    /// <param name="packet">
+    /// The packet data.
+    /// </param>
+    /// <param name="address">
+    /// A reference to a <see cref="DivertAddress"/> structure where the corresponding ChecksumValid fields will be set.
+    /// </param>
+    /// <param name="flags">The flags to disable individual checksum calculations.</param>
+    /// <returns>true if the checksums were calculated successfully; otherwise, false.</returns>
     public static bool CalculateChecksums(
         Span<byte> packet,
         ref DivertAddress address,
@@ -33,6 +55,11 @@ public static unsafe class DivertHelper
         }
     }
 
+    /// <summary>
+    /// Decrements the TTL field in the IP header of the specified packet.
+    /// </summary>
+    /// <param name="packet">The packet data.</param>
+    /// <returns>true if the result is non-zero; otherwise, false.</returns>
     public static bool DecrementTtl(Span<byte> packet)
     {
         fixed (byte* pPacket = packet)
@@ -41,6 +68,18 @@ public static unsafe class DivertHelper
         }
     }
 
+    /// <summary>
+    /// Compiles a WinDivert filter string into a compact object representation.
+    /// </summary>
+    /// <param name="filter">
+    /// The filter to compile.
+    /// </param>
+    /// <param name="layer">The layer.</param>
+    /// <param name="bufferLength">The length of the buffer.</param>
+    /// <returns>The compiled filter.</returns>
+    /// <exception cref="ArgumentException">
+    /// The filter is invalid.
+    /// </exception>
     public static ReadOnlySpan<byte> CompileFilter(
         DivertFilter filter,
         DivertLayer layer,
@@ -97,6 +136,13 @@ public static unsafe class DivertHelper
         }
     }
 
+    /// <summary>
+    /// Evaluates a compiled WinDivert filter against the specified packet and address.
+    /// </summary>
+    /// <param name="filter">The compiled filter.</param>
+    /// <param name="packet">The packet data.</param>
+    /// <param name="address">The address information.</param>
+    /// <returns>true if the packet matches the filter; otherwise, false.</returns>
     public static bool EvaluateFilter(ReadOnlySpan<byte> filter, ReadOnlySpan<byte> packet, in DivertAddress address)
     {
         fixed (byte* pFilter = filter)
@@ -107,6 +153,13 @@ public static unsafe class DivertHelper
         }
     }
 
+    /// <summary>
+    /// Evaluates a WinDivert filter string against the specified packet and address.
+    /// </summary>
+    /// <param name="filter">The filter to evaluate.</param>
+    /// <param name="packet">The packet data.</param>
+    /// <param name="address">The address information.</param>
+    /// <returns>true if the packet matches the filter; otherwise, false.</returns>
     public static bool EvaluateFilter(DivertFilter filter, ReadOnlySpan<byte> packet, in DivertAddress address)
     {
         using var s = new CString(filter.Clause);
@@ -117,6 +170,13 @@ public static unsafe class DivertHelper
         }
     }
 
+    /// <summary>
+    /// Formats a compiled WinDivert filter into a human-readable string.
+    /// </summary>
+    /// <param name="filter">The compiled filter.</param>
+    /// <param name="layer">The layer.</param>
+    /// <param name="maxLength">The maximum length of the formatted string.</param>
+    /// <returns>The formatted filter string.</returns>
     public static string FormatFilter(Span<byte> filter, DivertLayer layer, int maxLength = ushort.MaxValue)
     {
         Span<byte> buffer = GC.AllocateArray<byte>(maxLength, pinned: true);

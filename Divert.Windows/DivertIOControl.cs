@@ -5,6 +5,10 @@ using Windows.Win32.Foundation;
 
 namespace Divert.Windows;
 
+/// <summary>
+/// Replaces <see cref="NativeMethods.WinDivertSetParam"/> and <see cref="NativeMethods.WinDivertGetParam"/> as they
+/// are not applicable to thread pool bound handles.
+/// </summary>
 internal static unsafe class DivertIOControl
 {
     private static uint CTL_CODE(uint deviceType, uint function, uint method, uint access)
