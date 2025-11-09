@@ -68,7 +68,7 @@ jobs:
           name: build-artifacts
 
       - name: Run Tests
-        run: .local/windows/Divert.Windows.TestRunner/Divert.Windows.TestRunner.exe
+        run: ./.local/windows/Divert.Windows.TestRunner/Divert.Windows.TestRunner.exe
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
