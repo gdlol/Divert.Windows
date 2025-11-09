@@ -72,8 +72,8 @@ jobs:
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
-          path: .local/windows/TestResults
+          name: test-coverage
+          path: .local/windows/TestResults/coverage.cobertura.xml
 
   code-coverage:
     needs: test
@@ -85,12 +85,11 @@ jobs:
       - name: Download Test Results
         uses: actions/download-artifact@v4
         with:
-          name: test-results
-          path: .local/windows
+          name: test-coverage
 
       - name: Codecov
         uses: codecov/codecov-action@v5
         with:
           fail_ci_if_error: true
-          files: .local/windows/TestResults/coverage.cobertura.xml
+          files: coverage.cobertura.xml
           token: ${{ secrets.CODECOV_TOKEN }}

@@ -8,6 +8,7 @@
     "git-push": "pnpm run cake GitPush",
     "lint": "pnpm run cake Lint",
     "pack": "pnpm run cake Pack",
+    "publish": "pnpm run cake Publish",
     "restore": "pnpm run cake Restore",
     "test": "pnpm run cake Test",
     "test-report": "pnpm run cake TestReport"
