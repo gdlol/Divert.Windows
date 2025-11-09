@@ -20,6 +20,7 @@ public abstract class DivertTests : IDisposable
     public void Dispose()
     {
         cts.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     public static UdpClient CreateUdpListener(out int port)

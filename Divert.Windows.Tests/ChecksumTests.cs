@@ -33,8 +33,8 @@ public class ChecksumTests : DivertTests
         client.Connect(IPAddress.Loopback, port);
         await client.SendAsync(new byte[] { 1, 2, 3 }, Token);
 
-        var divertResult = await divertReceive;
-        var packet = packetBuffer.AsMemory(0, divertResult.DataLength);
+        (int length, _) = await divertReceive;
+        var packet = packetBuffer.AsMemory(0, length);
 
         // Calculate and then invalidate checksums
         Assert.IsTrue(DivertHelper.CalculateChecksums(packet.Span));

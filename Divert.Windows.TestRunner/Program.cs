@@ -5,6 +5,9 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Channels;
 
+// Runs ../Divert.Windows.Tests with coverage collection enabled.
+// In "watch" mode, run tests when receiving requests from Devcontainer.
+
 string appPath = Path.GetDirectoryName(Environment.ProcessPath)!;
 string testResultsDirectory = Path.Combine(appPath, "../TestResults");
 string coverageSettingsPath = Path.Combine(appPath, "CoverageSettings.xml");

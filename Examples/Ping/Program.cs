@@ -68,8 +68,8 @@ var outbound = Task.Run(async () =>
     {
         try
         {
-            var result = await outDivert.ReceiveAsync(buffer, addresses, cts.Token).ConfigureAwait(false);
-            var packet = buffer.AsMemory(0, result.DataLength);
+            (int packetLength, _) = await outDivert.ReceiveAsync(buffer, addresses, cts.Token).ConfigureAwait(false);
+            var packet = buffer.AsMemory(0, packetLength);
             var remoteAddress = new IPAddress(packet[16..20].Span);
             Console.WriteLine($"Pinging {remoteAddress} with {packet.Length - 28} bytes of data (Divert):");
             await outDivert.SendAsync(packet, addresses, cts.Token);
@@ -97,8 +97,8 @@ var inbound = Task.Run(async () =>
     {
         try
         {
-            var receiveResult = await inDivert.ReceiveAsync(buffer, addresses, cts.Token).ConfigureAwait(false);
-            var packet = buffer.AsMemory(0, receiveResult.DataLength);
+            (int packetLength, _) = await inDivert.ReceiveAsync(buffer, addresses, cts.Token).ConfigureAwait(false);
+            var packet = buffer.AsMemory(0, packetLength);
             var remoteAddress = new IPAddress(packet[12..16].Span);
             long timestamp = BitConverter.ToInt64(packet.Slice(28, sizeof(long)).Span);
             Console.WriteLine(

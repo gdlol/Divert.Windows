@@ -1,12 +1,13 @@
-# Divert.Windows
+﻿using System.Net;
+using System.Net.Sockets;
+using System.Runtime.Versioning;
+using System.Text;
+using Divert.Windows;
 
-High quality .NET APIs for WinDivert.
+// Captures a UDP packet and print to console.
 
-See https://reqrypt.org/windivert.html.
+[assembly: SupportedOSPlatform("windows6.0.6000")]
 
-# Example
-
-```csharp
 using var client = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
 var localEndPoint = (IPEndPoint)client.Client.LocalEndPoint!;
 int port = localEndPoint.Port;
@@ -22,6 +23,3 @@ await client.SendAsync("Hello"u8.ToArray(), localEndPoint);
 (int packetLength, _) = await receive;
 string message = Encoding.UTF8.GetString(buffer.AsSpan(28, packetLength));
 Console.WriteLine($"{message} from WinDivert!");
-```
-
-See also [Examples/](Examples/)
