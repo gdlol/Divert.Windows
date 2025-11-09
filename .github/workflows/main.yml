@@ -10,7 +10,12 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      GITHUB_REPOSITORY: ${{ github.repository }}
     steps:
+      - name: Set lowercase repository name
+        run: echo "GITHUB_REPOSITORY=${GITHUB_REPOSITORY@L}" >> $GITHUB_ENV
+
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
 
@@ -24,15 +29,15 @@ jobs:
       - name: Pre-build dev container image
         uses: devcontainers/ci@v0.3
         with:
-          imageName: ghcr.io/${{ github.repository }}/devcontainer
-          cacheFrom: ghcr.io/${{ github.repository }}/devcontainer
+          imageName: ghcr.io/${{ env.GITHUB_REPOSITORY }}/devcontainer
+          cacheFrom: ghcr.io/${{ env.GITHUB_REPOSITORY }}/devcontainer
           push: always
           runCmd: pnpm restore
 
       - name: Lint
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: ghcr.io/${{ github.repository }}/devcontainer
+          cacheFrom: ghcr.io/${{ env.GITHUB_REPOSITORY }}/devcontainer
           push: never
           runCmd: pnpm lint
 
@@ -41,7 +46,7 @@ jobs:
         env:
           DivertWindowsTests: "true"
         with:
-          cacheFrom: ghcr.io/${{ github.repository }}/devcontainer
+          cacheFrom: ghcr.io/${{ env.GITHUB_REPOSITORY }}/devcontainer
           push: never
           runCmd: pnpm build
 
