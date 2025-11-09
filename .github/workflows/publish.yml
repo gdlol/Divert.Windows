@@ -1,0 +1,29 @@
+name: "Publish"
+
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_REPOSITORY: ${{ github.repository }}
+    steps:
+      - name: Set lowercase repository name
+        run: echo "GITHUB_REPOSITORY=${GITHUB_REPOSITORY@L}" >> $GITHUB_ENV
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Publish
+        uses: devcontainers/ci@v0.3
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        with:
+          imageName: ghcr.io/${{ env.GITHUB_REPOSITORY }}/devcontainer
+          cacheFrom: ghcr.io/${{ env.GITHUB_REPOSITORY }}/devcontainer
+          push: never
+          runCmd: pnpm run publish

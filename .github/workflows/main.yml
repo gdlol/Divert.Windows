@@ -16,7 +16,7 @@ jobs:
       - name: Set lowercase repository name
         run: echo "GITHUB_REPOSITORY=${GITHUB_REPOSITORY@L}" >> $GITHUB_ENV
 
-      - name: Checkout (GitHub)
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Login to GitHub Container Registry
@@ -43,8 +43,6 @@ jobs:
 
       - name: Build
         uses: devcontainers/ci@v0.3
-        env:
-          DivertWindowsTests: "true"
         with:
           cacheFrom: ghcr.io/${{ env.GITHUB_REPOSITORY }}/devcontainer
           push: never
@@ -66,6 +64,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: build-artifacts
+          path: .local/windows
 
       - name: Run Tests
         run: .local/windows/Divert.Windows.TestRunner/Divert.Windows.TestRunner.exe
@@ -73,20 +72,24 @@ jobs:
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
-          path: .local/windows/TestResults
+          name: test-coverage
+          path: .local/windows/TestResults/coverage.cobertura.xml
 
   code-coverage:
     needs: test
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Download Test Results
         uses: actions/download-artifact@v4
         with:
-          name: test-results
+          name: test-coverage
 
       - name: Codecov
         uses: codecov/codecov-action@v5
         with:
-          files: .local/windows/TestResults/coverage.cobertura.xml
+          fail_ci_if_error: true
+          files: coverage.cobertura.xml
           token: ${{ secrets.CODECOV_TOKEN }}
