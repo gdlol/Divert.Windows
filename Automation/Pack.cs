@@ -1,3 +1,4 @@
+using Cake.Common.Diagnostics;
 using Cake.Common.IO;
 using Cake.Common.Tools.DotNet;
 using Cake.Frosting;
@@ -12,7 +13,12 @@ public class Pack : FrostingTask<Context>
         context.CleanDirectory(Context.PackagesDirectory);
 
         using var repository = new Git.Repository(Context.ProjectRoot);
-        string authors = repository.Config.Get<string>("user.name").Value;
+        string authors =
+            Environment.GetEnvironmentVariable("NUGET_AUTHORS")
+            ?? repository.Config.Get<string>("user.name")?.Value ?? throw new InvalidOperationException(
+                "Could not retrieve authors."
+            );
+        context.Information($"Authors: {authors}");
 
         context.DotNetPack(
             Path.Combine(Context.ProjectRoot, "Divert.Windows"),

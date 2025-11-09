@@ -17,13 +17,37 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Pack
+        uses: devcontainers/ci@v0.3
+        env:
+          NUGET_AUTHORS: ${{ github.repository_owner }}
+        with:
+          imageName: ghcr.io/${{ env.GITHUB_REPOSITORY }}/devcontainer
+          cacheFrom: ghcr.io/${{ env.GITHUB_REPOSITORY }}/devcontainer
+          push: never
+          runCmd: pnpm run pack
+          env: |
+            NUGET_AUTHORS
+
+      - name: Upload NuGet Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-package
+          path: .local/packages/*
 
       - name: Publish
         uses: devcontainers/ci@v0.3
         env:
+          NUGET_AUTHORS: ${{ github.repository_owner }}
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         with:
           imageName: ghcr.io/${{ env.GITHUB_REPOSITORY }}/devcontainer
           cacheFrom: ghcr.io/${{ env.GITHUB_REPOSITORY }}/devcontainer
           push: never
           runCmd: pnpm run publish
+          env: |
+            NUGET_AUTHORS
+            NUGET_API_KEY
