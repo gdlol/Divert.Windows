@@ -18,6 +18,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Pack
+        uses: devcontainers/ci@v0.3
+        with:
+          imageName: ghcr.io/${{ env.GITHUB_REPOSITORY }}/devcontainer
+          cacheFrom: ghcr.io/${{ env.GITHUB_REPOSITORY }}/devcontainer
+          push: never
+          runCmd: pnpm run pack
+
+      - name: Upload NuGet Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-package
+          path: .local/packages
+
       - name: Publish
         uses: devcontainers/ci@v0.3
         env:
@@ -28,3 +42,6 @@ jobs:
           cacheFrom: ghcr.io/${{ env.GITHUB_REPOSITORY }}/devcontainer
           push: never
           runCmd: pnpm run publish
+          env: |
+            NUGET_AUTHORS
+            NUGET_API_KEY
