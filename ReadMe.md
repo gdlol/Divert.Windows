@@ -1,5 +1,15 @@
 # Divert.Windows
 
+[CI Badge]: https://img.shields.io/github/actions/workflow/status/gdlol/Divert.Windows/.github%2Fworkflows%2Fmain.yml
+[CI URL]: https://github.com/gdlol/Divert.Windows/actions/workflows/main.yml
+[Codecov Badge]: https://img.shields.io/codecov/c/github/gdlol/Divert.Windows
+[Codecov URL]: https://codecov.io/gh/gdlol/Divert.Windows
+[License Badge]: https://img.shields.io/github/license/gdlol/Divert.Windows
+
+[![CI Badge][CI Badge]][CI URL]
+[![Codecov Badge][Codecov Badge]][Codecov URL]
+[![License Badge][License Badge]](LICENSE)
+
 High quality .NET APIs for WinDivert.
 
 See https://reqrypt.org/windivert.html.
